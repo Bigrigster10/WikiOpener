@@ -84,7 +84,15 @@ export function Layout() {
                 </div>
                 <div className="flex items-center gap-3">
                   <img src={profile.photoURL || 'https://images.unsplash.com/photo-1531297172867-4f50fe567361?auto=format&fit=crop&q=80&w=40&h=40'} alt="Avatar" className="w-10 h-10 rounded-full border border-gray-700 shadow-lg" referrerPolicy="no-referrer" />
-                  <button onClick={logout} className="text-gray-400 hover:text-white transition-colors" title="Log Out">
+                  <button onClick={() => {
+                    if (user.uid === 'dev-studio-user') {
+                      localStorage.removeItem('dev-mock-profile');
+                      localStorage.removeItem('dev-mock-inventory');
+                      window.location.reload();
+                    } else {
+                      logout();
+                    }
+                  }} className="text-gray-400 hover:text-white transition-colors" title="Log Out">
                     <LogOut className="w-5 h-5" />
                   </button>
                 </div>

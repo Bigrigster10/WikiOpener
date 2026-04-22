@@ -53,6 +53,9 @@ export interface Item {
   timestamp?: number;
 }
 
+const isDevMode = typeof window !== 'undefined' && (window.location.hostname.includes('.run.app') || window.location.hostname === 'localhost');
+const mockUserId = 'dev-studio-user';
+
 export const useGameStore = create<GameState>((set, get) => {
   const getInitialPreferences = (): Preferences => {
     try {
@@ -93,6 +96,19 @@ export const useGameStore = create<GameState>((set, get) => {
     init: () => {
     const savedTheme = localStorage.getItem('site-theme') || 'frosted-glass';
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    if (isDevMode) {
+      console.log("DEV MODE BINDING: Bypassing Firebase for local storage.");
+      const loadStr = localStorage.getItem('dev-mock-profile');
+      const profile = loadStr ? JSON.parse(loadStr) : {
+        userId: mockUserId, displayName: 'AI Studio Dev', photoURL: '', credits: 10000, netWorth: 10000, casesOpened: 0
+      };
+      const invStr = localStorage.getItem('dev-mock-inventory');
+      const inventory = invStr ? JSON.parse(invStr) : [];
+      
+      set({ user: { uid: mockUserId, displayName: 'AI Studio Dev' } as any, profile, inventory, loading: false });
+      return;
+    }
 
     onAuthStateChanged(auth, async (user) => {
       set({ user });
@@ -146,6 +162,25 @@ export const useGameStore = create<GameState>((set, get) => {
     const { user, profile } = get();
     if (!user || !profile) return;
 
+    if (isDevMode) {
+        const cases = (await import('../lib/gameLogic')).CASES;
+        const caseCost = cases.find(c => c.id === caseId)?.cost || 0;
+        if (profile.credits < caseCost) throw new Error("Not enough credits");
+        
+        const newItem = { ...itemData, id: 'mock-' + Date.now(), acquiredAt: Date.now() };
+        const newInv = [newItem, ...get().inventory];
+        const newCredits = profile.credits - caseCost;
+        const newNetWorth = newCredits + newInv.reduce((acc, i) => acc + i.value, 0);
+        
+        const newProfile = { ...profile, credits: newCredits, netWorth: newNetWorth, casesOpened: profile.casesOpened + 1 };
+        
+        localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+        localStorage.setItem('dev-mock-inventory', JSON.stringify(newInv));
+        
+        set({ profile: newProfile, inventory: newInv });
+        return;
+    }
+
     const userRef = doc(db, 'users', user.uid);
     const itemRef = itemData.id 
       ? doc(db, `users/${user.uid}/inventory`, itemData.id)
@@ -193,8 +228,20 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   sellItem: async (itemId: string, itemValue: number) => {
-    const { user } = get();
+    const { user, profile, inventory } = get();
     if (!user) return false;
+
+    if (isDevMode && profile) {
+        const newInv = inventory.filter(i => i.id !== itemId);
+        const newCredits = profile.credits + itemValue;
+        const newNetWorth = newCredits + newInv.reduce((acc, i) => acc + i.value, 0);
+        const newProfile = { ...profile, credits: newCredits, netWorth: newNetWorth };
+        
+        localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+        localStorage.setItem('dev-mock-inventory', JSON.stringify(newInv));
+        set({ profile: newProfile, inventory: newInv });
+        return true;
+    }
 
     const userRef = doc(db, 'users', user.uid);
     const itemRef = doc(db, `users/${user.uid}/inventory`, itemId);
@@ -230,6 +277,12 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchLeaderboard: async () => {
+    if (isDevMode) {
+       const { profile } = get();
+       if (profile) set({ leaderboard: [profile] });
+       return;
+    }
+    
     try {
       const q = query(collection(db, 'users'), orderBy('netWorth', 'desc'), limit(15));
       const snaps = await getDocs(q);
@@ -242,9 +295,16 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   recordAdWatch: async () => {
-    const { user } = get();
+    const { user, profile } = get();
     if (!user) return;
     
+    if (isDevMode && profile) {
+        const newProfile = { ...profile, lastAdWatchedAt: Date.now() };
+        localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+        set({ profile: newProfile });
+        return;
+    }
+
     const userRef = doc(db, 'users', user.uid);
     try {
       await setDoc(userRef, { lastAdWatchedAt: Date.now(), updatedAt: serverTimestamp() }, { merge: true });

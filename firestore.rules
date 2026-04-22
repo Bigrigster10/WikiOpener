@@ -1,67 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Primitive Helpers
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
-    // User Schema Validator
-    function isValidUser(data) {
-      // Allow optional fields during creation/update using "in data" logic, 
-      // but require base fields
-      return data.keys().hasAll(['userId', 'credits', 'netWorth', 'updatedAt', 'createdAt']) &&
-        data.userId == request.auth.uid &&
-        data.credits is number && data.credits >= 0 &&
-        data.netWorth is number && data.netWorth >= 0 &&
-        data.updatedAt == request.time &&
-        (data.get('casesOpened', 0) is number) &&
-        (data.get('displayName', '') is string) &&
-        (data.get('photoURL', '') is string);
-    }
-
-    // Item Schema Validator
-    function isValidItem(data) {
-      return data.keys().hasAll(['title', 'image', 'rarity', 'wear', 'value', 'acquiredAt']) &&
-        data.title is string && data.title.size() <= 200 &&
-        data.image is string && data.image.size() <= 1000 &&
-        data.rarity is string && data.rarity.size() <= 50 &&
-        data.wear is string && data.wear.size() <= 50 &&
-        data.value is number && data.value >= 0 &&
-        data.acquiredAt == request.time &&
-        (data.get('pageId', 0) is number) &&
-        (data.get('caseType', '') is string) &&
-        (data.get('durability', 0) is number);
-    }
-
-    // Default deny
+    // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
-
-    // Master Gate
+    
+    function isOwner(userId) { 
+      return request.auth != null && request.auth.uid == userId; 
+    }
+    
+    // Users Collection (contains balances, net worth, cases opened)
     match /users/{userId} {
       // Anyone can read profiles to populate the leaderboard
       allow read: if true;
-      
-      allow create: if isOwner(userId) && isValidId(userId) && 
-        isValidUser(incoming()) && incoming().createdAt == request.time;
-      
-      allow update: if isOwner(userId) && 
-        isValidUser(incoming()) &&
-        incoming().createdAt == existing().createdAt &&
-        incoming().userId == existing().userId;
+      // Only the authenticated user can create/update their own profile
+      allow create, update: if isOwner(userId);
       
       match /inventory/{itemId} {
-        // Anyone can read inventory to inspect top users
-        allow read: if true;
-        
-        allow create: if isOwner(userId) && isValidId(itemId) && isValidItem(incoming());
-        // Items are "deleted" when traded/sold for credits. No updates to existing items.
-        allow delete: if isOwner(userId);
+        // Only the authenticated user can read/write their inventory items
+        allow read, create, update, delete: if isOwner(userId);
       }
+    }
+    
+    // Legacy maps just in case
+    match /gameProfiles/{userId} {
+      allow read: if true;
+      allow create, update: if isOwner(userId);
+    }
+    match /items/{itemId} {
+      allow read, create, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update: if false;
     }
   }
 }
