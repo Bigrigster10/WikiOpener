@@ -1,0 +1,6 @@
+{
+  "name": "Wiki Case Clicker",
+  "description": "A case opening simulator that uses Wikipedia titles as items, featuring inventory, trading, different cases, and a global leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

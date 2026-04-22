@@ -1,0 +1,367 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-accent: var(--accent);
+}
+
+:root, [data-theme="frosted-glass"] {
+  --bg-color: #0a0a0c;
+  --text-color: #ffffff;
+  --text-muted: #9ca3af;
+  --mesh-1: #1e1b4b;
+  --mesh-2: #4c1d95;
+  --mesh-3: #0f172a;
+  --mesh-4: #020617;
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --accent: #6366f1;
+  --pattern-bg: none;
+  --pattern-opacity: 0;
+  --screen-filter: none;
+}
+
+[data-theme="minimal-light"] {
+  --bg-color: #f8fafc; --text-color: #0f172a; --text-muted: #64748b;
+  --mesh-1: #e2e8f0; --mesh-2: #cbd5e1; --mesh-3: #f1f5f9; --mesh-4: #f8fafc;
+  --glass-bg: rgba(255, 255, 255, 0.6); --glass-border: rgba(0, 0, 0, 0.1); --accent: #3b82f6;
+}
+
+[data-theme="minimal-dark"] {
+  --bg-color: #020617; --text-color: #f8fafc; --text-muted: #94a3b8;
+  --mesh-1: #0f172a; --mesh-2: #1e293b; --mesh-3: #020617; --mesh-4: #000000;
+  --glass-bg: rgba(255, 255, 255, 0.03); --glass-border: rgba(255, 255, 255, 0.1); --accent: #a855f7;
+}
+
+[data-theme="synthwave"] {
+  --bg-color: #2d1b69; --text-color: #ffffff; --text-muted: #a78bfa;
+  --mesh-1: #ff2a6d; --mesh-2: #05d9e8; --mesh-3: #01012b; --mesh-4: #2d1b69;
+  --glass-bg: rgba(0, 0, 0, 0.4); --glass-border: rgba(5, 217, 232, 0.3); --accent: #ff2a6d;
+}
+
+[data-theme="cyberpunk"] {
+  --bg-color: #fcee0a; --text-color: #000000; --text-muted: #333333;
+  --mesh-1: #ff003c; --mesh-2: #00ff00; --mesh-3: #fcee0a; --mesh-4: #fcf000;
+  --glass-bg: rgba(0, 0, 0, 0.1); --glass-border: rgba(0, 0, 0, 0.5); --accent: #ff003c;
+}
+
+[data-theme="emerald-forest"] {
+  --bg-color: #064e3b; --text-color: #ecfdf5; --text-muted: #6ee7b7;
+  --mesh-1: #065f46; --mesh-2: #047857; --mesh-3: #022c22; --mesh-4: #064e3b;
+  --glass-bg: rgba(0, 0, 0, 0.2); --glass-border: rgba(16, 185, 129, 0.2); --accent: #10b981;
+}
+
+[data-theme="deep-ocean"] {
+  --bg-color: #082f49; --text-color: #f0f9ff; --text-muted: #7dd3fc;
+  --mesh-1: #0369a1; --mesh-2: #0284c7; --mesh-3: #0c4a6e; --mesh-4: #082f49;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(14, 165, 233, 0.2); --accent: #0ea5e9;
+}
+
+[data-theme="magma-core"] {
+  --bg-color: #450a0a; --text-color: #fef2f2; --text-muted: #fca5a5;
+  --mesh-1: #991b1b; --mesh-2: #b91c1c; --mesh-3: #450a0a; --mesh-4: #2b0606;
+  --glass-bg: rgba(0, 0, 0, 0.4); --glass-border: rgba(239, 68, 68, 0.2); --accent: #ef4444;
+}
+
+[data-theme="royal-violet"] {
+  --bg-color: #3b0764; --text-color: #fdf4ff; --text-muted: #f0abfc;
+  --mesh-1: #6b21a8; --mesh-2: #86198f; --mesh-3: #2e1065; --mesh-4: #3b0764;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(217, 70, 239, 0.2); --accent: #d946ef;
+}
+
+[data-theme="the-matrix"] {
+  --bg-color: #000000; --text-color: #22c55e; --text-muted: #16a34a;
+  --mesh-1: #000000; --mesh-2: #052e16; --mesh-3: #000000; --mesh-4: #000000;
+  --glass-bg: rgba(34, 197, 94, 0.05); --glass-border: rgba(34, 197, 94, 0.3); --accent: #22c55e;
+}
+
+[data-theme="retro-sunset"] {
+  --bg-color: #170529; --text-color: #ffffff; --text-muted: #fdba74;
+  --mesh-1: #9333ea; --mesh-2: #ea580c; --mesh-3: #170529; --mesh-4: #000000;
+  --glass-bg: rgba(0, 0, 0, 0.3); --glass-border: rgba(249, 115, 22, 0.3); --accent: #f97316;
+}
+
+[data-theme="neon-pink"] {
+  --bg-color: #1a0010; --text-color: #ffffff; --text-muted: #fbcfe8;
+  --mesh-1: #be185d; --mesh-2: #db2777; --mesh-3: #1a0010; --mesh-4: #000000;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(236, 72, 153, 0.3); --accent: #ec4899;
+}
+
+[data-theme="deep-space"] {
+  --bg-color: #000000; --text-color: #ffffff; --text-muted: #9ca3af;
+  --mesh-1: #171717; --mesh-2: #262626; --mesh-3: #000000; --mesh-4: #000000;
+  --glass-bg: rgba(255, 255, 255, 0.03); --glass-border: rgba(255, 255, 255, 0.05); --accent: #fbbf24;
+}
+
+[data-theme="dracula"] {
+  --bg-color: #282a36; --text-color: #f8f8f2; --text-muted: #6272a4;
+  --mesh-1: #44475a; --mesh-2: #6272a4; --mesh-3: #282a36; --mesh-4: #282a36;
+  --glass-bg: rgba(68, 71, 90, 0.5); --glass-border: rgba(255, 121, 198, 0.2); --accent: #ff79c6;
+}
+
+[data-theme="solarized-dark"] {
+  --bg-color: #002b36; --text-color: #839496; --text-muted: #586e75;
+  --mesh-1: #073642; --mesh-2: #586e75; --mesh-3: #002b36; --mesh-4: #002b36;
+  --glass-bg: rgba(7, 54, 66, 0.5); --glass-border: rgba(42, 161, 152, 0.2); --accent: #2aa198;
+}
+
+[data-theme="solarized-light"] {
+  --bg-color: #fdf6e3; --text-color: #657b83; --text-muted: #93a1a1;
+  --mesh-1: #eee8d5; --mesh-2: #93a1a1; --mesh-3: #fdf6e3; --mesh-4: #fdf6e3;
+  --glass-bg: rgba(238, 232, 213, 0.5); --glass-border: rgba(38, 139, 210, 0.2); --accent: #268bd2;
+}
+
+[data-theme="monokai"] {
+  --bg-color: #272822; --text-color: #f8f8f2; --text-muted: #75715e;
+  --mesh-1: #3e3d32; --mesh-2: #75715e; --mesh-3: #272822; --mesh-4: #272822;
+  --glass-bg: rgba(62, 61, 50, 0.5); --glass-border: rgba(166, 226, 46, 0.2); --accent: #a6e22e;
+}
+
+[data-theme="nord"] {
+  --bg-color: #2e3440; --text-color: #eceff4; --text-muted: #4c566a;
+  --mesh-1: #3b4252; --mesh-2: #434c5e; --mesh-3: #2e3440; --mesh-4: #2e3440;
+  --glass-bg: rgba(59, 66, 82, 0.5); --glass-border: rgba(136, 192, 208, 0.2); --accent: #88c0d0;
+}
+
+[data-theme="gruvbox"] {
+  --bg-color: #282828; --text-color: #ebdbb2; --text-muted: #a89984;
+  --mesh-1: #3c3836; --mesh-2: #504945; --mesh-3: #282828; --mesh-4: #282828;
+  --glass-bg: rgba(60, 56, 54, 0.5); --glass-border: rgba(254, 128, 25, 0.2); --accent: #fe8019;
+}
+
+[data-theme="blood-moon"] {
+  --bg-color: #100000; --text-color: #fca5a5; --text-muted: #991b1b;
+  --mesh-1: #450a0a; --mesh-2: #7f1d1d; --mesh-3: #100000; --mesh-4: #000000;
+  --glass-bg: rgba(255, 0, 0, 0.05); --glass-border: rgba(220, 38, 38, 0.3); --accent: #dc2626;
+}
+
+/* 20 NEW THEMES WITH PATTERNS AND FILTERS */
+[data-theme="vaporwave-2"] {
+  --bg-color: #220b34; --text-color: #00ffff; --text-muted: #ff00ff;
+  --mesh-1: #800080; --mesh-2: #ff00ff; --mesh-3: #00ffff; --mesh-4: #220b34;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(0, 255, 255, 0.4); --accent: #00ffff;
+  --pattern-bg: linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+  --pattern-size: 40px 40px; --pattern-opacity: 1;
+  --screen-filter: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+}
+
+[data-theme="hacker-terminal"] {
+  --bg-color: #050505; --text-color: #00ff00; --text-muted: #008800;
+  --mesh-1: #002200; --mesh-2: #003300; --mesh-3: #000000; --mesh-4: #050505;
+  --glass-bg: rgba(0, 255, 0, 0.02); --glass-border: rgba(0, 255, 0, 0.3); --accent: #00ff00;
+  --screen-filter: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px);
+}
+
+[data-theme="gameboy-classic"] {
+  --bg-color: #9bbc0f; --text-color: #0f380f; --text-muted: #306230;
+  --mesh-1: #8bac0f; --mesh-2: #9bbc0f; --mesh-3: #8bac0f; --mesh-4: #9bbc0f;
+  --glass-bg: rgba(15, 56, 15, 0.05); --glass-border: rgba(15, 56, 15, 0.3); --accent: #0f380f;
+  --pattern-bg: linear-gradient(rgba(15,56,15,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15,56,15,0.05) 1px, transparent 1px);
+  --pattern-size: 4px 4px; --pattern-opacity: 1;
+}
+
+[data-theme="blueprint"] {
+  --bg-color: #1e3a8a; --text-color: #ffffff; --text-muted: #93c5fd;
+  --mesh-1: #1e40af; --mesh-2: #1d4ed8; --mesh-3: #1e3a8a; --mesh-4: #172554;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(255, 255, 255, 0.4); --accent: #bfdbfe;
+  --pattern-bg: linear-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  --pattern-size: 30px 30px; --pattern-opacity: 1;
+}
+
+[data-theme="noir-film"] {
+  --bg-color: #111111; --text-color: #eeeeee; --text-muted: #888888;
+  --mesh-1: #222222; --mesh-2: #333333; --mesh-3: #111111; --mesh-4: #050505;
+  --glass-bg: rgba(255, 255, 255, 0.02); --glass-border: rgba(255, 255, 255, 0.15); --accent: #ffffff;
+  --screen-filter: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.9) 130%);
+}
+
+[data-theme="blood-ritual"] {
+  --bg-color: #1a0000; --text-color: #ffcccc; --text-muted: #aa0000;
+  --mesh-1: #4d0000; --mesh-2: #330000; --mesh-3: #1a0000; --mesh-4: #000000;
+  --glass-bg: rgba(255, 0, 0, 0.04); --glass-border: rgba(255, 0, 0, 0.3); --accent: #ff0000;
+  --screen-filter: radial-gradient(circle, transparent 50%, rgba(50,0,0,0.9) 110%);
+}
+
+[data-theme="golden-age"] {
+  --bg-color: #fffbeb; --text-color: #78350f; --text-muted: #b45309;
+  --mesh-1: #fef3c7; --mesh-2: #fde68a; --mesh-3: #fffbeb; --mesh-4: #fffbeb;
+  --glass-bg: rgba(120, 53, 15, 0.05); --glass-border: rgba(120, 53, 15, 0.2); --accent: #d97706;
+  --screen-filter: radial-gradient(circle, transparent 60%, rgba(120,53,15,0.15) 100%);
+}
+
+[data-theme="y2k-chrome"] {
+  --bg-color: #cbd5e1; --text-color: #0f172a; --text-muted: #475569;
+  --mesh-1: #f8fafc; --mesh-2: #e2e8f0; --mesh-3: #94a3b8; --mesh-4: #cbd5e1;
+  --glass-bg: rgba(255, 255, 255, 0.4); --glass-border: rgba(255, 255, 255, 0.8); --accent: #0284c7;
+  --pattern-bg: repeating-radial-gradient(circle, rgba(255,255,255,0.8) 0, rgba(255,255,255,0) 2px, transparent 20px);
+  --pattern-opacity: 0.5;
+}
+
+[data-theme="thermal-vision"] {
+  --bg-color: #000080; --text-color: #ffff00; --text-muted: #00ffff;
+  --mesh-1: #ff0000; --mesh-2: #ff8800; --mesh-3: #0088ff; --mesh-4: #000080;
+  --glass-bg: rgba(255, 0, 0, 0.1); --glass-border: rgba(255, 255, 0, 0.4); --accent: #ff0000;
+  --screen-filter: radial-gradient(circle, transparent 20%, rgba(0,0,128,0.3) 100%);
+}
+
+[data-theme="night-vision"] {
+  --bg-color: #002200; --text-color: #88ff88; --text-muted: #008800;
+  --mesh-1: #004400; --mesh-2: #005500; --mesh-3: #002200; --mesh-4: #001100;
+  --glass-bg: rgba(0, 255, 0, 0.05); --glass-border: rgba(0, 255, 0, 0.4); --accent: #00ff00;
+  --screen-filter: repeating-linear-gradient(0deg, rgba(0,50,0,0.1), rgba(0,50,0,0.1) 1px, transparent 1px, transparent 3px), radial-gradient(circle, transparent 40%, rgba(0,20,0,0.9) 120%);
+}
+
+[data-theme="synth-pop"] {
+  --bg-color: #ff007f; --text-color: #ffffff; --text-muted: #ffb3d9;
+  --mesh-1: #7df9ff; --mesh-2: #ffff00; --mesh-3: #ff007f; --mesh-4: #cc0066;
+  --glass-bg: rgba(255, 255, 255, 0.1); --glass-border: rgba(125, 249, 255, 0.4); --accent: #ffff00;
+  --pattern-bg: linear-gradient(rgba(125,249,255,0.2) 2px, transparent 2px), linear-gradient(90deg, rgba(125,249,255,0.2) 2px, transparent 2px);
+  --pattern-size: 30px 30px; --pattern-opacity: 1;
+}
+
+[data-theme="halftone-manga"] {
+  --bg-color: #ffffff; --text-color: #000000; --text-muted: #666666;
+  --mesh-1: #dddddd; --mesh-2: #cccccc; --mesh-3: #ffffff; --mesh-4: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.8); --glass-border: rgba(0, 0, 0, 0.2); --accent: #ff0000;
+  --pattern-bg: radial-gradient(circle, #000000 1.5px, transparent 2px);
+  --pattern-size: 8px 8px; --pattern-opacity: 0.15;
+}
+
+[data-theme="glitch-matrix"] {
+  --bg-color: #0d0d0d; --text-color: #00ffcc; --text-muted: #ff003c;
+  --mesh-1: #ff003c; --mesh-2: #00ffcc; --mesh-3: #000000; --mesh-4: #000000;
+  --glass-bg: rgba(0, 255, 204, 0.05); --glass-border: rgba(255, 0, 60, 0.5); --accent: #ff003c;
+  --pattern-bg: repeating-linear-gradient(90deg, transparent, transparent 100px, rgba(0,255,204,0.05) 100px, rgba(0,255,204,0.05) 102px);
+  --pattern-opacity: 1;
+}
+
+[data-theme="biohazard-zone"] {
+  --bg-color: #111a00; --text-color: #bbff00; --text-muted: #77aa00;
+  --mesh-1: #334d00; --mesh-2: #223300; --mesh-3: #111a00; --mesh-4: #050a00;
+  --glass-bg: rgba(187, 255, 0, 0.05); --glass-border: rgba(187, 255, 0, 0.3); --accent: #bbff00;
+  --pattern-bg: radial-gradient(circle, rgba(187,255,0,0.05) 20%, transparent 20%);
+  --pattern-size: 50px 50px; --pattern-opacity: 1;
+  --screen-filter: radial-gradient(circle, transparent 40%, rgba(20,30,0,0.9) 110%);
+}
+
+[data-theme="outrun-sunset"] {
+  --bg-color: #0b0f19; --text-color: #ffffff; --text-muted: #f472b6;
+  --mesh-1: #ec4899; --mesh-2: #f59e0b; --mesh-3: #4c1d95; --mesh-4: #0f172a;
+  --glass-bg: rgba(255, 255, 255, 0.05); --glass-border: rgba(245, 158, 11, 0.4); --accent: #f59e0b;
+  --pattern-bg: linear-gradient(rgba(245, 158, 11, 0.2) 2px, transparent 2px), linear-gradient(90deg, rgba(236, 72, 153, 0.2) 2px, transparent 2px);
+  --pattern-size: 60px 60px; --pattern-opacity: 1;
+}
+
+[data-theme="cosmic-eldritch"] {
+  --bg-color: #0a0314; --text-color: #d8b4fe; --text-muted: #7e22ce;
+  --mesh-1: #581c87; --mesh-2: #3b0764; --mesh-3: #1e1b4b; --mesh-4: #000000;
+  --glass-bg: rgba(126, 34, 206, 0.05); --glass-border: rgba(168, 85, 247, 0.3); --accent: #a855f7;
+  --pattern-bg: radial-gradient(circle, rgba(168,85,247,0.15) 1.5px, transparent 1.5px);
+  --pattern-size: 25px 25px; --pattern-opacity: 1;
+  --screen-filter: radial-gradient(circle, transparent 20%, rgba(10,3,20,0.95) 120%);
+}
+
+[data-theme="polka-pop"] {
+  --bg-color: #fef08a; --text-color: #1e3a8a; --text-muted: #3b82f6;
+  --mesh-1: #fde047; --mesh-2: #facc15; --mesh-3: #fef08a; --mesh-4: #fef08a;
+  --glass-bg: rgba(255, 255, 255, 0.4); --glass-border: rgba(30, 58, 138, 0.2); --accent: #e11d48;
+  --pattern-bg: radial-gradient(circle, rgba(225,29,72,0.15) 10px, transparent 11px);
+  --pattern-size: 40px 40px; --pattern-opacity: 1;
+}
+
+[data-theme="ruled-notebook"] {
+  --bg-color: #f8fafc; --text-color: #334155; --text-muted: #94a3b8;
+  --mesh-1: #f1f5f9; --mesh-2: #e2e8f0; --mesh-3: #f8fafc; --mesh-4: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.6); --glass-border: rgba(59, 130, 246, 0.3); --accent: #ef4444;
+  --pattern-bg: repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(59,130,246,0.3) 26px, rgba(59,130,246,0.3) 27px);
+  --pattern-opacity: 1;
+}
+
+[data-theme="honeycomb-hive"] {
+  --bg-color: #f59e0b; --text-color: #451a03; --text-muted: #78350f;
+  --mesh-1: #fbbf24; --mesh-2: #fcd34d; --mesh-3: #f59e0b; --mesh-4: #d97706;
+  --glass-bg: rgba(255, 255, 255, 0.2); --glass-border: rgba(69, 26, 3, 0.2); --accent: #451a03;
+  --pattern-bg: repeating-linear-gradient(60deg, rgba(69,26,3,0.1) 0, rgba(69,26,3,0.1) 1px, transparent 1px, transparent 20px), repeating-linear-gradient(-60deg, rgba(69,26,3,0.1) 0, rgba(69,26,3,0.1) 1px, transparent 1px, transparent 20px);
+  --pattern-opacity: 1;
+}
+
+[data-theme="tv-static"] {
+  --bg-color: #333333; --text-color: #ffffff; --text-muted: #999999;
+  --mesh-1: #555555; --mesh-2: #444444; --mesh-3: #222222; --mesh-4: #111111;
+  --glass-bg: rgba(255, 255, 255, 0.1); --glass-border: rgba(255, 255, 255, 0.2); --accent: #ffffff;
+  --pattern-bg: repeating-radial-gradient(circle, rgba(255,255,255,0.1) 0, transparent 2px, rgba(0,0,0,0.1) 4px);
+  --pattern-size: 6px 6px; --pattern-opacity: 1;
+  --screen-filter: repeating-linear-gradient(0deg, rgba(0,0,0,0.05), rgba(0,0,0,0.05) 1px, transparent 1px, transparent 2px);
+}
+
+body {
+  background-color: var(--bg-color);
+  font-family: var(--font-sans);
+  color: var(--text-color);
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--screen-filter, none);
+  transition: background 0.3s ease;
+}
+
+/* Force specific structural text components to adhere to theme mutedness where needed */
+p.text-gray-400, span.text-gray-400, div.text-gray-400 {
+  color: var(--text-muted);
+}
+p.text-gray-500, span.text-gray-500, div.text-gray-500, h3.text-gray-500 {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+.text-white {
+  color: var(--text-color);
+}
+
+.mesh-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background: radial-gradient(circle at 20% 30%, var(--mesh-1) 0%, transparent 40%),
+              radial-gradient(circle at 80% 70%, var(--mesh-2) 0%, transparent 40%),
+              radial-gradient(circle at 50% 50%, var(--mesh-3) 0%, var(--mesh-4) 100%);
+  transition: background 0.3s ease;
+}
+
+.mesh-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--pattern-bg, none);
+  background-size: var(--pattern-size, auto);
+  opacity: var(--pattern-opacity, 0);
+  transition: opacity 0.3s ease;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-\\[shimmer_2s_infinite\\] {
+  animation: shimmer 2s infinite;
+}

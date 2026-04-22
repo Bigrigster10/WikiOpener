@@ -1,0 +1,723 @@
+import { useState, useMemo, useEffect } from 'react';
+import { useGameStore, Item } from '../store/gameStore';
+import { CASES, drawRarity, generateDurability, getWearInfo, calculateValue, fetchRandomWikiArticle, CaseType, RARITIES } from '../lib/gameLogic';
+import { motion, AnimatePresence } from 'motion/react';
+import { Coins, Loader2, Search, Filter, Info, X, ChevronLeft, Gem, Crosshair, Package } from 'lucide-react';
+
+import { playSound } from '../lib/sounds';
+import { CaseRoulette } from '../components/CaseRoulette';
+
+export function Play() {
+  const { profile, openCase, preferences, sellItem, recordAdWatch } = useGameStore();
+  const [selectedMode, setSelectedMode] = useState<'original' | 'csgo' | 'premium' | null>(null);
+  
+  const [opening, setOpening] = useState(false);
+  const [activeCaseData, setActiveCaseData] = useState<CaseType | null>(null);
+  const [spinReward, setSpinReward] = useState<Item | null>(null);
+  const [reward, setReward] = useState<Item | null>(null);
+  const [oddsModal, setOddsModal] = useState<CaseType | null>(null);
+  
+  const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState('default');
+  const [adModal, setAdModal] = useState<CaseType | null>(null);
+  const [adPlaying, setAdPlaying] = useState(false);
+  const [adCooldownRemaining, setAdCooldownRemaining] = useState<number>(0);
+
+  useEffect(() => {
+    setSortOrder('default');
+    setSearch('');
+  }, [selectedMode]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (profile && profile.lastAdWatchedAt) {
+        const remaining = 3 * 60 * 60 * 1000 - (Date.now() - profile.lastAdWatchedAt);
+        if (remaining > 0) {
+          setAdCooldownRemaining(remaining);
+        } else {
+          setAdCooldownRemaining(0);
+        }
+      } else {
+        setAdCooldownRemaining(0);
+      }
+    }, 1000);
+    // Initial check
+    if (profile && profile.lastAdWatchedAt) {
+      const remaining = 3 * 60 * 60 * 1000 - (Date.now() - profile.lastAdWatchedAt);
+      if (remaining > 0) setAdCooldownRemaining(remaining);
+    }
+    return () => clearInterval(interval);
+  }, [profile]);
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours}h ${minutes}m ${seconds}s`;
+  };
+
+  const handleWatchAd = (caseData: CaseType) => {
+    setAdModal(caseData);
+    setAdPlaying(true);
+    // Fake a 5 second ad
+    setTimeout(() => {
+      setAdPlaying(false);
+    }, 5000);
+  };
+
+  const handleClaimAdReward = async () => {
+    if (adModal) {
+      try {
+        await recordAdWatch();
+        // Free open without cost
+        handleOpen(adModal.id, true);
+        setAdModal(null);
+      } catch (error) {
+        console.error("Failed to claim ad reward:", error);
+        alert("Failed to claim reward. Please try again.");
+        setAdModal(null);
+      }
+    }
+  };
+
+  const categoryFilteredCases = useMemo(() => {
+    if (selectedMode === 'csgo') {
+      return CASES.filter(c => c.category === 'CS:GO');
+    }
+    if (selectedMode === 'premium') {
+      return CASES.filter(c => c.isPremium);
+    }
+    return CASES.filter(c => c.category !== 'CS:GO' && !c.isPremium);
+  }, [selectedMode]);
+
+  const filteredCases = useMemo(() => {
+    let result = [...categoryFilteredCases];
+    
+    // Apple Search Filter
+    if (search) {
+      result = result.filter(c => 
+        c.name.toLowerCase().includes(search.toLowerCase()) || 
+        c.description.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    // Apply Sort Order
+    const getPrice = (c: CaseType) => c.isPremium ? (c.realMoneyPrice || 0) : c.cost;
+
+    if (sortOrder === 'name-asc') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortOrder === 'name-desc') {
+      result.sort((a, b) => b.name.localeCompare(a.name));
+    } else if (sortOrder === 'price-desc') {
+      result.sort((a, b) => getPrice(b) - getPrice(a));
+    } else if (sortOrder === 'price-asc') {
+      result.sort((a, b) => getPrice(a) - getPrice(b));
+    } else if (sortOrder === 'category-asc') {
+      result.sort((a, b) => a.category.localeCompare(b.category));
+    } else if (sortOrder === 'category-desc') {
+      result.sort((a, b) => b.category.localeCompare(a.category));
+    }
+
+    return result;
+  }, [search, sortOrder, categoryFilteredCases]);
+
+  const handleOpenComplete = async (caseId: string, item: Item) => {
+    try {
+      await openCase(caseId, item);
+      
+      // awesome sounds
+      if (item.rarity === RARITIES.EXCEEDINGLY_RARE.name) {
+          playSound('legendary');
+      } else if (item.rarity === RARITIES.COVERT.name || item.rarity === RARITIES.CLASSIFIED.name) {
+          playSound('epic');
+      } else {
+          playSound('success');
+      }
+
+      setSpinReward(null);
+      setReward(item);
+      setOpening(false);
+      setActiveCaseData(null);
+    } catch (error) {
+      console.error("Failed to open case:", error);
+      alert("Failed to claim item. Please try again.");
+      setOpening(false);
+      setSpinReward(null);
+      setActiveCaseData(null);
+    }
+  };
+
+  const handleOpen = async (caseId: string, free: boolean = false) => {
+    if (!profile) return;
+    const caseData = CASES.find(c => c.id === caseId);
+    if (!caseData || (!free && !caseData.isPremium && profile.credits < caseData.cost)) return;
+
+    setOpening(true);
+    setActiveCaseData(caseData);
+    setReward(null);
+    playSound('open');
+
+    try {
+      const rarity = drawRarity(caseId);
+      const durability = generateDurability();
+      const wearInfo = getWearInfo(durability);
+      const value = calculateValue(rarity.id, wearInfo.multiplier, caseData);
+      
+      const wikiData = await fetchRandomWikiArticle(caseData.category);
+
+      const newItem: Item = {
+        id: crypto.randomUUID(), // we need this to process the sell button safely
+        title: wikiData.title,
+        image: wikiData.image,
+        pageId: wikiData.pageId,
+        rarity: rarity.name,
+        wear: wearInfo.label,
+        durability,
+        value,
+        caseType: caseData.name,
+        timestamp: Date.now()
+      };
+
+      if (!preferences.fastOpen) {
+        setSpinReward(newItem);
+        // handoff to roulette
+      } else {
+        await handleOpenComplete(caseId, newItem);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to open case.");
+      setOpening(false);
+      setActiveCaseData(null);
+    }
+  };
+
+  const rarityColorMap: Record<string, string> = {
+    'Consumer Grade': 'text-gray-400 bg-gray-400/5',
+    'Mil-Spec': 'text-blue-500 bg-blue-500/5',
+    'Restricted': 'text-purple-500 bg-purple-500/5',
+    'Classified': 'text-pink-500 bg-pink-500/5',
+    'Covert': 'text-red-500 bg-red-500/5 text-shadow-sm',
+    'Exceedingly Rare': 'text-yellow-400 bg-yellow-400/5 text-shadow-[0_0_10px_rgba(250,204,21,0.5)]',
+  };
+
+  const getModalVariants = (rarity: string) => {
+    switch (rarity) {
+      case 'Exceedingly Rare':
+        return {
+          initial: { scale: 0.1, opacity: 0, rotate: -45, y: -500 },
+          animate: { 
+            scale: 1, 
+            opacity: 1, 
+            rotate: 0, 
+            y: 0,
+            transition: { type: "spring", damping: 10, stiffness: 200, mass: 1.5 } 
+          }
+        };
+      case 'Covert':
+        return {
+          initial: { scale: 0.05, opacity: 0 },
+          animate: { 
+            scale: 1, 
+            opacity: 1, 
+            transition: { type: "spring", damping: 12, stiffness: 250 } 
+          }
+        };
+      case 'Classified':
+        return {
+          initial: { scale: 0.5, opacity: 0, y: 300 },
+          animate: { 
+            scale: 1, 
+            opacity: 1, 
+            y: 0, 
+            transition: { type: "spring", damping: 14, stiffness: 180 } 
+          }
+        };
+      case 'Restricted':
+        return {
+          initial: { x: -300, opacity: 0, skewX: -30 },
+          animate: { 
+            x: 0, 
+            opacity: 1, 
+            skewX: 0, 
+            transition: { type: "spring", damping: 15, stiffness: 150 } 
+          }
+        };
+      case 'Mil-Spec':
+        return {
+          initial: { scale: 0.2, opacity: 0 },
+          animate: { 
+            scale: 1, 
+            opacity: 1, 
+            transition: { type: "spring", damping: 18, stiffness: 220 } 
+          }
+        };
+      default:
+        return {
+          initial: { scale: 0.8, opacity: 0, y: 40 },
+          animate: { 
+            scale: 1, 
+            opacity: 1, 
+            y: 0, 
+            transition: { type: "spring", damping: 20, stiffness: 120 } 
+          }
+        };
+    }
+  };
+
+  if (!selectedMode) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full max-w-5xl mx-auto py-12 px-4 space-y-12 shrink-0 my-auto">
+        <div className="text-center space-y-4">
+          <h2 className="text-4xl sm:text-5xl font-black uppercase text-white tracking-tighter">Choose Your Drop Path</h2>
+          <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto">Select a category of cases to explore and unlock hidden Wikipedia knowledge. Rarer cases contain highly coveted internet artifacts.</p>
+        </div>
+        
+        <div className="grid md:grid-cols-3 gap-6 sm:gap-8 w-full">
+          <button 
+            onClick={() => setSelectedMode('original')}
+            className="group flex flex-col bg-black/40 border border-white/10 hover:border-emerald-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-[0_0_40px_rgba(16,185,129,0.2)] transition-all transform hover:-translate-y-2 text-left"
+          >
+            <div className="h-40 bg-gradient-to-br from-emerald-900/40 to-black flex flex-col justify-center items-center relative overflow-hidden">
+               <Package className="w-16 h-16 text-emerald-400 z-10 group-hover:scale-110 transition-transform duration-500" />
+               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.2)_0%,transparent_70%)]" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-emerald-400 transition-colors">Original Cases</h3>
+              <p className="text-gray-400 text-sm">Classic wiki-article drops modeled after generic physical loot boxes. A great place to start your journey.</p>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => setSelectedMode('csgo')}
+            className="group flex flex-col bg-black/40 border border-white/10 hover:border-blue-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-[0_0_40px_rgba(59,130,246,0.2)] transition-all transform hover:-translate-y-2 text-left"
+          >
+            <div className="h-40 bg-gradient-to-br from-blue-900/40 to-black flex flex-col justify-center items-center relative overflow-hidden">
+               <Crosshair className="w-16 h-16 text-blue-400 z-10 group-hover:scale-110 transition-transform duration-500" />
+               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.2)_0%,transparent_70%)]" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-blue-400 transition-colors">CS:GO Patterns</h3>
+              <p className="text-gray-400 text-sm">Cases engineered closely to legendary eSports crates. Contains high-volatility rarity distributions.</p>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => setSelectedMode('premium')}
+            className="group flex flex-col bg-black/40 border border-white/10 hover:border-purple-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-[0_0_40px_rgba(168,85,247,0.2)] transition-all transform hover:-translate-y-2 text-left"
+          >
+            <div className="h-40 bg-gradient-to-br from-purple-900/40 to-black flex flex-col justify-center items-center relative overflow-hidden">
+               <Gem className="w-16 h-16 text-purple-400 z-10 group-hover:scale-110 transition-transform duration-500" />
+               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.2)_0%,transparent_70%)]" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-purple-400 transition-colors">Premium Caches</h3>
+              <p className="text-gray-400 text-sm">Exclusive, high-roller crates containing the rarest and most legendary internet pages. Requires Ads or Purchases.</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto pb-12 overflow-y-auto">
+      <div className="flex items-center gap-4 mt-2">
+        <button 
+          onClick={() => setSelectedMode(null)}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-sm font-medium"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to Categories
+        </button>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between mt-2">
+        <div className="space-y-1 w-full md:w-auto text-center md:text-left">
+          <h2 className="text-3xl font-black tracking-tighter uppercase text-white">
+            {selectedMode === 'csgo' ? 'CS:GO Patterns' : selectedMode === 'premium' ? 'Premium Caches' : 'Original Cases'}
+          </h2>
+          <p className="text-gray-400 text-sm">
+            Spend your credits to open thematic cases.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto flex-1 md:max-w-2xl justify-end">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input 
+              type="text" 
+              placeholder="Search cases..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          <div className="relative shrink-0">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <select 
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="w-full sm:w-auto appearance-none bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-10 text-sm text-white focus:outline-none focus:border-accent transition-colors cursor-pointer"
+            >
+              <option value="default" className="bg-gray-900">Sort: Default</option>
+              <option value="name-asc" className="bg-gray-900">Name (A-Z)</option>
+              <option value="name-desc" className="bg-gray-900">Name (Z-A)</option>
+              <option value="price-desc" className="bg-gray-900">Price (High-Low)</option>
+              <option value="price-asc" className="bg-gray-900">Price (Low-High)</option>
+              <option value="category-asc" className="bg-gray-900">Category (A-Z)</option>
+              <option value="category-desc" className="bg-gray-900">Category (Z-A)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Case Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {filteredCases.map((c) => {
+          const afford = profile ? profile.credits >= c.cost : false;
+          return (
+            <div key={c.id} className="glass overflow-hidden flex flex-col transition-transform hover:scale-[1.02] cursor-default shadow-lg group">
+              <div className="h-40 relative w-full overflow-hidden flex items-center justify-center p-4 border-b border-white/5 bg-black/20">
+                <img 
+                  src={c.image} 
+                  alt={c.name} 
+                  loading="lazy" 
+                  decoding="async" 
+                  onError={(e) => {
+                    e.currentTarget.src = `https://picsum.photos/seed/${c.id}/300/300`;
+                    e.currentTarget.className = "object-cover h-full w-full opacity-30 mix-blend-screen grayscale";
+                  }}
+                  className="object-cover h-full w-full opacity-60 group-hover:opacity-100 transition-opacity drop-shadow-xl saturate-50 group-hover:saturate-100 mix-blend-screen" 
+                  referrerPolicy="no-referrer" 
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c]/80 to-transparent mix-blend-overlay"></div>
+                <div className="absolute top-2 left-2">
+                  <span className="bg-black/50 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-[9px] text-white font-bold uppercase tracking-wider">{c.category}</span>
+                </div>
+                <div className="absolute top-2 right-2 z-10">
+                  <button 
+                    onClick={() => setOddsModal(c)}
+                    className="bg-black/50 hover:bg-black/80 backdrop-blur-md border border-white/10 p-1.5 rounded transition-colors text-gray-300 hover:text-white"
+                    title="View Odds"
+                  >
+                    <Info className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 flex flex-col flex-1 gap-3 bg-white/5">
+                <div className="flex flex-col">
+                  <h3 className="font-bold text-white text-sm truncate" title={c.name}>{c.name}</h3>
+                  <p className="text-[10px] text-gray-400 line-clamp-2 mt-1 leading-snug h-7" title={c.description}>{c.description}</p>
+                </div>
+                
+                <div className="flex justify-between items-center bg-black/30 rounded px-2 py-1.5 border border-white/5">
+                   <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-bold text-sm">
+                    {c.isPremium ? (
+                      <span className="text-yellow-400">Premium Case</span>
+                    ) : (
+                      preferences.currency === 'CR' ? (
+                        <span>{c.cost.toLocaleString()} CR</span>
+                      ) : (
+                        <span>${c.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {c.isPremium ? (
+                  <div className="flex gap-2">
+                    <button
+                      disabled={opening || adCooldownRemaining > 0}
+                      onClick={() => handleWatchAd(c)}
+                      className={`w-full py-2.5 rounded-lg flex-1 font-bold uppercase tracking-widest text-[10px] transition-all flex flex-col justify-center items-center shadow ${adCooldownRemaining > 0 ? 'bg-black/20 text-gray-500 cursor-not-allowed border border-white/5' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
+                      title={adCooldownRemaining > 0 ? "Next ad available in " + formatTime(adCooldownRemaining) : "Watch Ad"}
+                    >
+                      {adCooldownRemaining > 0 ? (
+                         <>
+                           <span className="text-[9px]">Cooldown</span>
+                           <span>{formatTime(adCooldownRemaining)}</span>
+                         </>
+                      ) : (
+                        <span>Watch Ad</span>
+                      )}
+                    </button>
+                    <button
+                      disabled={opening}
+                      onClick={() => handleOpen(c.id, true)}
+                      className={`w-full py-2.5 rounded-lg flex-1 font-bold uppercase tracking-widest text-[10px] transition-all flex justify-center items-center shadow bg-emerald-600 hover:bg-emerald-500 text-white`}
+                    >
+                      Buy ${c.realMoneyPrice}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    disabled={opening || !afford}
+                    onClick={() => handleOpen(c.id)}
+                    className={`w-full py-2.5 rounded-lg font-bold uppercase tracking-widest text-[11px] transition-all flex justify-center items-center shadow ${
+                      !afford 
+                        ? 'bg-black/20 text-gray-500 cursor-not-allowed border border-white/5' 
+                        : opening
+                          ? 'bg-accent/50 text-white/50 cursor-wait'
+                          : 'bg-accent hover:brightness-110 text-white shadow-accent/20'
+                    }`}
+                  >
+                    {opening ? "..." : afford ? 'Open' : 'Locked'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Probability Odds Modal */}
+      <AnimatePresence>
+        {oddsModal && !opening && !reward && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              className="glass max-w-sm w-full shadow-2xl flex flex-col p-6 gap-6 relative"
+            >
+              <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                <h3 className="text-xl font-bold text-white">{oddsModal.name} Odds</h3>
+                <button 
+                  onClick={() => setOddsModal(null)} 
+                  className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {oddsModal.odds.map((odd, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
+                    <span className={`font-bold text-sm ${odd.rarity.color}`}>{odd.rarity.name}</span>
+                    <span className="text-white font-mono text-sm">{(odd.chance * 100).toFixed(2)}%</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                onClick={() => setOddsModal(null)} 
+                className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold transition-colors uppercase text-sm tracking-widest"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Roulette Animation */}
+      {spinReward && activeCaseData && (
+        <CaseRoulette 
+          targetItem={spinReward} 
+          activeCase={activeCaseData} 
+          onFinish={() => handleOpenComplete(activeCaseData.id, spinReward)} 
+        />
+      )}
+
+      {/* Reveal Modal */}
+      <AnimatePresence>
+        {reward && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 z-[100] flex flex-col items-center p-4 backdrop-blur-xl overflow-y-auto ${
+              reward.rarity === 'Exceedingly Rare' ? 'bg-yellow-500/20' : 
+              reward.rarity === 'Covert' ? 'bg-red-900/40' : 
+              'bg-black/80'
+            }`}
+          >
+            {/* spacer to help center the modal if less than full height */}
+            <div className="flex-grow shrink-0 h-4 min-h-[4vh]"></div>
+
+            {/* Huge screen flash bang for high rarity items */}
+            {(reward.rarity === 'Exceedingly Rare' || reward.rarity === 'Covert' || reward.rarity === 'Classified' || reward.rarity === 'Restricted') && (
+              <motion.div
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 0 }}
+                transition={{ duration: 1.5, ease: "easeOut" }}
+                className="fixed inset-0 z-50 bg-white pointer-events-none mix-blend-overlay"
+              />
+            )}
+
+            {/* Crazy glow effect for high tier items */}
+            {reward.rarity === 'Exceedingly Rare' && (
+               <motion.div 
+                 initial={{ opacity: 0, scale: 0, rotate: 0 }}
+                 animate={{ opacity: [0, 1, 0.8], scale: [0, 2, 1.5], rotate: [0, 90, 180] }}
+                 transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                 className="fixed inset-0 z-[-1] pointer-events-none flex items-center justify-center"
+               >
+                 <div className="w-[200vw] h-[20vw] bg-yellow-400/20 blur-[60px] transform rotate-45"></div>
+                 <div className="w-[200vw] h-[20vw] bg-yellow-500/20 blur-[60px] transform -rotate-45 absolute"></div>
+               </motion.div>
+            )}
+            {reward.rarity === 'Covert' && (
+               <motion.div 
+                 initial={{ opacity: 0, scale: 0 }}
+                 animate={{ opacity: [0, 0.8, 0.5], scale: [0, 1.5, 1.2] }}
+                 transition={{ duration: 3, repeat: Infinity, repeatType: "mirror" }}
+                 className="fixed inset-0 z-[-1] pointer-events-none flex items-center justify-center -translate-y-20"
+               >
+                 <div className="w-[100vw] h-[100vw] rounded-full bg-red-600/30 blur-[100px]"></div>
+                 <div className="w-[50vw] h-[50vw] rounded-full bg-red-500/40 blur-[80px] absolute"></div>
+               </motion.div>
+            )}
+            {reward.rarity === 'Classified' && (
+               <motion.div 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: [0, 0.5, 0.3], scale: [1, 1.2, 1] }}
+                 transition={{ duration: 4, repeat: Infinity }}
+                 className="fixed inset-0 z-[-1] pointer-events-none flex items-center justify-center"
+               >
+                 <div className="w-[80vw] h-[80vw] rounded-full bg-pink-500/20 blur-[100px]"></div>
+               </motion.div>
+            )}
+
+            <motion.div 
+              variants={getModalVariants(reward.rarity)}
+              initial="initial"
+              animate="animate"
+              className={`glass max-w-lg w-full shadow-2xl flex flex-col overflow-hidden relative shrink-0 border-2 ${
+                reward.rarity === 'Exceedingly Rare' ? 'border-yellow-400/50 shadow-[0_0_50px_rgba(250,204,21,0.3)]' :
+                reward.rarity === 'Covert' ? 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.3)]' :
+                rarityColorMap[reward.rarity]?.split(' ')?.[1] || 'border-gray-500'
+              }`}
+            >
+              <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-50"></div>
+              
+              <div className="p-8 pb-4 flex flex-col items-center text-center gap-4">
+                <div className="bg-black/30 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 mb-2 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+                  <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${rarityColorMap[reward.rarity]?.split(' ')[0] || 'text-white'}`}>
+                    {reward.rarity} Drop
+                  </span>
+                </div>
+
+                <div className="relative w-56 h-56 flex items-center justify-center my-4 group">
+                  <div className="absolute inset-0 bg-white/5 rounded-2xl -rotate-6 transition-transform group-hover:rotate-0 border border-white/10"></div>
+                  <div className="absolute inset-0 bg-black/20 rounded-2xl rotate-3 transition-transform group-hover:rotate-0 border border-white/5 backdrop-blur-sm"></div>
+                  
+                  <motion.img 
+                    initial={{ y: 50, scale: 0.5, rotate: -20 }}
+                    animate={{ y: [0, -10, 0], scale: 1, rotate: 0 }}
+                    transition={{ 
+                      y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 },
+                      scale: { type: "spring", stiffness: 300, damping: 12 },
+                      rotate: { type: "spring", stiffness: 300, damping: 12 }
+                    }}
+                    src={reward.image} 
+                    alt={reward.title} 
+                    className="max-h-full object-cover relative z-10 drop-shadow-2xl rounded-lg" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                <h2 className="text-3xl font-black text-white leading-tight drop-shadow-md">{reward.title}</h2>
+                <div className="flex gap-2 text-xs font-mono">
+                  <span className="text-gray-400 bg-black/40 px-2 py-0.5 rounded border border-white/10 uppercase font-bold tracking-wider">{reward.caseType}</span>
+                  <span className={`px-2 py-0.5 rounded border border-white/10 font-bold uppercase ${
+                    reward.wear === 'Factory New' ? 'text-emerald-400 bg-emerald-400/10' :
+                    reward.wear === 'Minimal Wear' ? 'text-green-400 bg-green-400/10' :
+                    reward.wear === 'Field-Tested' ? 'text-yellow-400 bg-yellow-400/10' :
+                    reward.wear === 'Well-Worn' ? 'text-orange-400 bg-orange-400/10' :
+                    'text-red-400 bg-red-400/10'
+                  }`}>
+                    {reward.wear}
+                  </span>
+                </div>
+                
+                <div className="mt-4 flex items-center justify-center bg-black/30 w-full py-4 rounded-xl border border-white/5 gap-3">
+                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Market Value</span>
+                  <div className="font-mono text-2xl font-bold text-emerald-400 flex items-center drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
+                    {preferences.currency === 'CR' ? (
+                      <span>{reward.value.toLocaleString()} CR</span>
+                    ) : (
+                      <span>${reward.value.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-black/40 border-t border-white/5 flex flex-col gap-2">
+                <button 
+                  onClick={() => setReward(null)}
+                  className="w-full py-4 bg-white hover:bg-gray-200 text-black rounded-lg font-black transition-all shadow-[0_0_15px_rgba(255,255,255,0.2)] uppercase tracking-widest text-sm"
+                >
+                  Keep Item
+                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      playSound('sell');
+                      sellItem(reward.id, reward.value);
+                      setReward(null);
+                    }}
+                    className="flex-1 py-3 bg-black/40 hover:bg-red-500/20 hover:text-red-400 text-gray-400 rounded-lg font-bold transition-all border border-white/10 hover:border-red-500/50 uppercase tracking-widest text-[10px] flex justify-center items-center gap-2"
+                  >
+                    Sell Instantly
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+            
+            {/* bottom spacer to ensure scrolling creates space below modal */}
+            <div className="flex-grow shrink-0 h-10 min-h-[10vh]"></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Ad Modal */}
+      <AnimatePresence>
+        {adPlaying && adModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-4"
+          >
+            <div className="flex flex-col items-center justify-center max-w-sm text-center">
+              <div className="w-16 h-16 relative">
+                <Loader2 className="w-16 h-16 text-accent animate-spin absolute" />
+              </div>
+              <h2 className="text-3xl font-black mt-8 mb-4 uppercase tracking-tighter text-white">Ad Playing...</h2>
+              <p className="text-gray-400">Please wait while the advertisement finishes to receive your {adModal.name}.</p>
+              <p className="text-emerald-400 mt-4 font-bold animate-pulse">Remaining: 5 seconds</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {!adPlaying && adModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-4"
+          >
+            <div className="flex flex-col items-center justify-center max-w-sm text-center bg-gray-900 p-8 rounded-xl border border-white/10 shadow-2xl">
+              <h2 className="text-3xl font-black mb-4 uppercase tracking-tighter text-emerald-400">Reward Unlocked!</h2>
+              <p className="text-gray-300 mb-6">You've successfully watched the ad. You can now open {adModal.name} for free!</p>
+              <button
+                onClick={handleClaimAdReward}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded text-white font-bold uppercase tracking-widest text-sm"
+              >
+                Claim Reward
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+}

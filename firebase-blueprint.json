@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, balance, and stats for the leaderboard.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string", "description": "Display name to show on leaderboard" },
+        "photoURL": { "type": "string", "description": "Avatar to show on leaderboard" },
+        "credits": { "type": "number", "description": "Available credits to buy better cases" },
+        "netWorth": { "type": "number", "description": "Total value of items + credits. Primary stat for leaderboard." },
+        "casesOpened": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "credits", "netWorth", "updatedAt", "createdAt"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "An item collected by opening a case.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "image": { "type": "string" },
+        "rarity": { "type": "string" },
+        "wear": { "type": "string" },
+        "value": { "type": "number" },
+        "pageId": { "type": "number" },
+        "caseType": { "type": "string" },
+        "acquiredAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "rarity", "wear", "value", "acquiredAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profile and top-level stats."
+    },
+    "/users/{userId}/inventory/{itemId}": {
+      "schema": { "$ref": "#/entities/Item" },
+      "description": "Stores items currently owned by the user."
+    }
+  }
+}

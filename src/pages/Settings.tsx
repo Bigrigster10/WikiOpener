@@ -1,0 +1,264 @@
+import React, { useState } from 'react';
+import { useGameStore } from '../store/gameStore';
+import { Settings as SettingsIcon, Palette, Monitor, Terminal, Key, Shield } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+
+export const THEMES = [
+  { id: 'frosted-glass', name: 'Frosted Glass', bg: '#0A0A0C', accent: '#6366f1' },
+  { id: 'minimal-light', name: 'Minimal Light', bg: '#F8FAFC', accent: '#3b82f6' },
+  { id: 'minimal-dark', name: 'Minimal Dark', bg: '#0F172A', accent: '#a855f7' },
+  { id: 'synthwave', name: 'Synthwave', bg: '#2d1b69', accent: '#ff2a6d' },
+  { id: 'cyberpunk', name: 'Cyberpunk', bg: '#fcee0a', accent: '#00ff00', darkText: true },
+  { id: 'emerald-forest', name: 'Emerald Forest', bg: '#064e3b', accent: '#10b981' },
+  { id: 'deep-ocean', name: 'Deep Ocean', bg: '#082f49', accent: '#0ea5e9' },
+  { id: 'magma-core', name: 'Magma Core', bg: '#7f1d1d', accent: '#ef4444' },
+  { id: 'royal-violet', name: 'Royal Violet', bg: '#3b0764', accent: '#d946ef' },
+  { id: 'the-matrix', name: 'The Matrix', bg: '#000000', accent: '#22c55e' },
+  { id: 'retro-sunset', name: 'Retro Sunset', bg: '#170529', accent: '#f97316' },
+  { id: 'neon-pink', name: 'Neon Pink', bg: '#1a0010', accent: '#ec4899' },
+  { id: 'deep-space', name: 'Deep Space', bg: '#000000', accent: '#fbbf24' },
+  { id: 'dracula', name: 'Dracula', bg: '#282a36', accent: '#ff79c6' },
+  { id: 'solarized-dark', name: 'Solarized Dark', bg: '#002b36', accent: '#2aa198' },
+  { id: 'solarized-light', name: 'Solarized Light', bg: '#fdf6e3', accent: '#268bd2', darkText: true },
+  { id: 'monokai', name: 'Monokai', bg: '#272822', accent: '#a6e22e' },
+  { id: 'nord', name: 'Nord', bg: '#2e3440', accent: '#88c0d0' },
+  { id: 'gruvbox', name: 'Gruvbox', bg: '#282828', accent: '#fe8019' },
+  { id: 'blood-moon', name: 'Blood Moon', bg: '#100000', accent: '#dc2626' },
+  { id: 'vaporwave-2', name: 'Vapor Grid', bg: '#220b34', accent: '#00ffff' },
+  { id: 'hacker-terminal', name: 'Terminal', bg: '#050505', accent: '#00ff00' },
+  { id: 'gameboy-classic', name: 'Gameboy', bg: '#9bbc0f', accent: '#0f380f', darkText: true },
+  { id: 'blueprint', name: 'Blueprint', bg: '#1e3a8a', accent: '#bfdbfe' },
+  { id: 'noir-film', name: 'Noir Film', bg: '#111111', accent: '#ffffff' },
+  { id: 'blood-ritual', name: 'Blood Ritual', bg: '#1a0000', accent: '#ff0000' },
+  { id: 'golden-age', name: 'Golden Age', bg: '#fffbeb', accent: '#d97706', darkText: true },
+  { id: 'y2k-chrome', name: 'Y2K Chrome', bg: '#cbd5e1', accent: '#0284c7', darkText: true },
+  { id: 'thermal-vision', name: 'Thermal', bg: '#000080', accent: '#ff0000' },
+  { id: 'night-vision', name: 'Night Vision', bg: '#002200', accent: '#00ff00' },
+  { id: 'synth-pop', name: 'Synth Pop', bg: '#ff007f', accent: '#ffff00' },
+  { id: 'halftone-manga', name: 'Manga Dot', bg: '#ffffff', accent: '#ff0000', darkText: true },
+  { id: 'glitch-matrix', name: 'Glitch Art', bg: '#0d0d0d', accent: '#ff003c' },
+  { id: 'biohazard-zone', name: 'Biohazard', bg: '#111a00', accent: '#bbff00' },
+  { id: 'chalkboard-math', name: 'Chalkboard', bg: '#2b3a32', accent: '#facc15' },
+  { id: 'outrun-sunset', name: 'Outrun', bg: '#0b0f19', accent: '#f59e0b' },
+  { id: 'cosmic-eldritch', name: 'Eldritch', bg: '#0a0314', accent: '#a855f7' },
+  { id: 'polka-pop', name: 'Polka Pop', bg: '#fef08a', accent: '#e11d48', darkText: true },
+  { id: 'ruled-notebook', name: 'Notebook', bg: '#f8fafc', accent: '#ef4444', darkText: true },
+  { id: 'honeycomb-hive', name: 'Honeycomb', bg: '#f59e0b', accent: '#451a03', darkText: true },
+  { id: 'tv-static', name: 'TV Static', bg: '#333333', accent: '#ffffff' }
+];
+
+export function Settings() {
+  const { theme, setTheme, user, profile } = useGameStore();
+  const [devCode, setDevCode] = useState('');
+  const [devUnlocked, setDevUnlocked] = useState(false);
+
+  const handleDevCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const code = e.target.value;
+    setDevCode(code);
+    if (code === "righismithopensesamehellomynameisrighi4/20/2026") {
+      setDevUnlocked(true);
+    } else {
+      setDevUnlocked(false);
+    }
+  };
+
+  const handleGiveMoney = async (amount: number) => {
+    if (!user || !profile) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userRef, {
+        credits: profile.credits + amount,
+        netWorth: profile.netWorth + amount,
+        updatedAt: serverTimestamp()
+      });
+      alert(`Successfully added ${amount} credits!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to add credits.');
+    }
+  };
+
+  const handleResetMoney = async () => {
+    if (!user || !profile) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userRef, {
+        credits: 0,
+        netWorth: profile.netWorth - profile.credits,
+        updatedAt: serverTimestamp()
+      });
+      alert('Successfully reset credits to 0!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to reset credits.');
+    }
+  };
+
+  return (
+    <div className="w-full max-w-4xl mx-auto space-y-8 pb-12">
+      <div className="flex items-center gap-4 glass p-6 mb-8 w-fit">
+        <SettingsIcon className="w-8 h-8 text-gray-400" />
+        <h2 className="text-3xl font-black tracking-tight uppercase text-white">Application Settings</h2>
+      </div>
+
+      <div className="space-y-6">
+        <section className="glass p-6 sm:p-8 flex flex-col gap-6">
+          <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+            <Palette className="w-6 h-6 text-accent" />
+            <h3 className="text-xl font-bold uppercase tracking-widest text-white">Visual Themes</h3>
+          </div>
+          
+          <p className="text-gray-400 text-sm max-w-2xl">
+            Customize the look and feel of WIKIOPENER. Choose from 41 different highly calibrated aesthetics.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                className={`glass flex flex-col items-center justify-center gap-3 p-4 rounded-xl transition-all border-2 ${
+                  theme === t.id ? 'border-white shadow-[0_0_15px_rgba(255,255,255,0.2)] scale-105' : 'border-transparent hover:border-white/20 hover:scale-105'
+                }`}
+              >
+                <div 
+                  className="w-12 h-12 rounded-full border border-white/20 shadow-lg flex items-center justify-center overflow-hidden"
+                  style={{ backgroundColor: t.bg }}
+                >
+                  <div className="w-6 h-6 rounded-full" style={{ backgroundColor: t.accent }}></div>
+                </div>
+                <span className="text-xs font-bold text-center tracking-wider text-white">{t.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="glass p-6 sm:p-8 flex flex-col gap-6">
+          <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+            <Monitor className="w-6 h-6 text-accent" />
+            <h3 className="text-xl font-bold uppercase tracking-widest text-white">Preferences</h3>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            
+            <button 
+              onClick={() => {
+                const state = useGameStore.getState();
+                state.setPreference('fastOpen', !state.preferences.fastOpen);
+                import('../lib/sounds').then(m => m.playSound('click'));
+              }}
+              className={`glass p-4 text-left border-2 transition-all cursor-pointer ${useGameStore.getState().preferences.fastOpen ? 'border-accent' : 'border-transparent'}`}
+            >
+              <div className="flex justify-between items-center mb-1">
+                <div className="font-bold text-white">Fast Case Opening</div>
+                <div className={`w-4 h-4 rounded-full ${useGameStore.getState().preferences.fastOpen ? 'bg-accent shadow-[0_0_10px_var(--accent)]' : 'bg-gray-600'}`}></div>
+              </div>
+              <div className="text-xs text-gray-400">Skip the decryption animation when opening cases.</div>
+            </button>
+
+            <button 
+              onClick={() => {
+                const state = useGameStore.getState();
+                state.setPreference('streamerMode', !state.preferences.streamerMode);
+                import('../lib/sounds').then(m => m.playSound('click'));
+              }}
+              className={`glass p-4 text-left border-2 transition-all cursor-pointer ${useGameStore.getState().preferences.streamerMode ? 'border-accent' : 'border-transparent'}`}
+            >
+              <div className="flex justify-between items-center mb-1">
+                <div className="font-bold text-white">Streamer Mode</div>
+                <div className={`w-4 h-4 rounded-full ${useGameStore.getState().preferences.streamerMode ? 'bg-accent shadow-[0_0_10px_var(--accent)]' : 'bg-gray-600'}`}></div>
+              </div>
+              <div className="text-xs text-gray-400">Hides actual net worth from the global leaderboard.</div>
+            </button>
+
+            <button 
+              onClick={() => {
+                const state = useGameStore.getState();
+                state.setPreference('sound', !state.preferences.sound);
+                import('../lib/sounds').then(m => m.playSound('click'));
+              }}
+              className={`glass p-4 text-left border-2 transition-all cursor-pointer ${useGameStore.getState().preferences.sound ? 'border-accent' : 'border-transparent'}`}
+            >
+              <div className="flex justify-between items-center mb-1">
+                <div className="font-bold text-white">Sound Effects</div>
+                <div className={`w-4 h-4 rounded-full ${useGameStore.getState().preferences.sound ? 'bg-accent shadow-[0_0_10px_var(--accent)]' : 'bg-gray-600'}`}></div>
+              </div>
+              <div className="text-xs text-gray-400">Toggle UI sounds and case opening audio.</div>
+            </button>
+
+            <button 
+              onClick={() => {
+                const state = useGameStore.getState();
+                state.setPreference('currency', state.preferences.currency === 'USD' ? 'CR' : 'USD');
+                import('../lib/sounds').then(m => m.playSound('click'));
+              }}
+              className="glass p-4 text-left border-2 border-transparent transition-all cursor-pointer hover:border-white/20"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <div className="font-bold text-white">Value Currency</div>
+                <div className="px-2 py-0.5 rounded bg-white/10 text-xs font-bold text-white">
+                  {useGameStore.getState().preferences.currency}
+                </div>
+              </div>
+              <div className="text-xs text-gray-400">Display item values in USD or Credits (CR).</div>
+            </button>
+
+          </div>
+        </section>
+
+        {/* Developer Sandbox Section */}
+        <section className="glass p-6 sm:p-8 flex flex-col gap-6">
+          <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+            <Terminal className="w-6 h-6 text-accent" />
+            <h3 className="text-xl font-bold uppercase tracking-widest text-white">Developer Sandbox</h3>
+          </div>
+          <p className="text-gray-400 text-sm max-w-2xl">
+            Restricted access. Enter the developer code to unlock the cheat menu.
+          </p>
+
+          <div className="relative">
+            <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input 
+              type="password" 
+              value={devCode}
+              onChange={handleDevCodeChange}
+              placeholder="Enter developer code..." 
+              className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors"
+            />
+          </div>
+
+          {devUnlocked && (
+            <div className="mt-4 p-6 bg-red-500/10 border border-red-500/30 rounded-xl space-y-4">
+              <h4 className="text-red-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                <Shield className="w-4 h-4" /> Dev Access Granted
+              </h4>
+              <p className="text-sm text-gray-300">You are now operating with developer privileges. Use these tools carefully.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <button 
+                  onClick={() => handleGiveMoney(10000)}
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                >
+                  Give 10,000 Credits
+                </button>
+                <button 
+                  onClick={() => handleGiveMoney(1000000)}
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                >
+                  Give 1,000,000 Credits
+                </button>
+                <button 
+                  onClick={handleResetMoney}
+                  className="bg-gray-800 border-2 border-red-500/50 hover:bg-gray-700 text-red-500 font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                >
+                  Reset Balance
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+      </div>
+    </div>
+  );
+}
