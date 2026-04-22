@@ -1,10 +1,9 @@
 {
-  "projectId": "gen-lang-client-0897976386",
-  "appId": "1:752810639374:web:2acc131ea1d424df3ebc5f",
-  "apiKey": "AIzaSyDq8ghKb_6q8NK3blI2D3uT6KVtZL6rAfo",
-  "authDomain": "gen-lang-client-0897976386.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-eeece23e-4c32-4646-9ee3-e0b7bd9c48ab",
-  "storageBucket": "gen-lang-client-0897976386.firebasestorage.app",
-  "messagingSenderId": "752810639374",
-  "measurementId": ""
+  "apiKey": "AIzaSyC4US6kUPjBMT1ZMCoG3-sl7JStGlH77qA",
+  "authDomain": "wikiopener.firebaseapp.com",
+  "projectId": "wikiopener",
+  "storageBucket": "wikiopener.firebasestorage.app",
+  "messagingSenderId": "844806126745",
+  "appId": "1:844806126745:web:b285fc8cf586c0dbde4c08",
+  "measurementId": "G-15Q9RYFD81"
 }
