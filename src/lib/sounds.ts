@@ -20,96 +20,119 @@ export function playSound(type: 'click' | 'open' | 'success' | 'sell' | 'tick' |
     const ctx = getContext();
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
+    
+    // Add a lowpass filter to remove the harsh digital high frequencies
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1500, ctx.currentTime);
 
-    osc.connect(gainNode);
+    osc.connect(filter);
+    filter.connect(gainNode);
     gainNode.connect(ctx.destination);
 
     const now = ctx.currentTime;
+    
+    // Default to 0 gain immediately to prevent "popping" or "clicking" artifacts
+    gainNode.gain.setValueAtTime(0, now);
 
     switch (type) {
       case 'click':
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+        gainNode.gain.linearRampToValueAtTime(0.08, now + 0.01); // Quick soft attack
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1); // Smooth release
         osc.start(now);
         osc.stop(now + 0.1);
         break;
+        
       case 'tick':
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-        gainNode.gain.setValueAtTime(0.05, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(700, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0.05, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
         osc.start(now);
         osc.stop(now + 0.05);
         break;
+        
       case 'open':
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(100, now);
-        osc.frequency.linearRampToValueAtTime(800, now + 1.2);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + 1.2);
-        osc.start(now);
-        osc.stop(now + 1.2);
-        break;
-      case 'success':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.setValueAtTime(600, now + 0.1);
-        osc.frequency.setValueAtTime(800, now + 0.2);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
-        break;
-      case 'epic':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
-        osc.frequency.setValueAtTime(1200, now + 0.4);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + 1.0);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 1.0);
+        gainNode.gain.linearRampToValueAtTime(0.06, now + 0.2); // Swell in
+        gainNode.gain.linearRampToValueAtTime(0, now + 1.0); // Fade out
         osc.start(now);
         osc.stop(now + 1.0);
         break;
+        
+      case 'success':
+        // A nice, warm major arpeggio
+        osc.type = 'sine';
+        filter.frequency.setValueAtTime(2000, now);
+        osc.frequency.setValueAtTime(440.00, now); // A4
+        osc.frequency.setValueAtTime(554.37, now + 0.15); // C#5
+        osc.frequency.setValueAtTime(659.25, now + 0.3); // E5
+        gainNode.gain.linearRampToValueAtTime(0.08, now + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+        break;
+        
+      case 'epic':
+        // Richer synth sweep using a filtered triangle wave
+        osc.type = 'triangle';
+        filter.frequency.setValueAtTime(600, now);
+        filter.frequency.linearRampToValueAtTime(2500, now + 0.6); // Filter sweep opening up
+        
+        osc.frequency.setValueAtTime(329.63, now); // E4
+        osc.frequency.setValueAtTime(415.30, now + 0.15); // G#4
+        osc.frequency.setValueAtTime(493.88, now + 0.3); // B4
+        osc.frequency.setValueAtTime(659.25, now + 0.45); // E5
+        
+        gainNode.gain.linearRampToValueAtTime(0.08, now + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+        osc.start(now);
+        osc.stop(now + 1.2);
+        break;
+        
       case 'legendary':
-        // Complex chord/sweep for exceedingly rare
-        osc.type = 'square';
+        // A majestic, warm chord progression using layered sines/triangles
+        osc.type = 'triangle';
         const osc2 = ctx.createOscillator();
         const osc3 = ctx.createOscillator();
-        osc2.type = 'sawtooth';
-        osc3.type = 'triangle';
+        osc2.type = 'sine';
+        osc3.type = 'sine';
         
-        osc2.connect(gainNode);
-        osc3.connect(gainNode);
+        osc2.connect(filter);
+        osc3.connect(filter);
         
-        osc.frequency.setValueAtTime(400, now);
-        osc2.frequency.setValueAtTime(500, now);
-        osc3.frequency.setValueAtTime(600, now);
+        // A major chord -> D major chord
+        osc.frequency.setValueAtTime(220.00, now); // A3
+        osc2.frequency.setValueAtTime(277.18, now); // C#4
+        osc3.frequency.setValueAtTime(329.63, now); // E4
         
-        osc.frequency.exponentialRampToValueAtTime(1000, now + 1.5);
-        osc2.frequency.exponentialRampToValueAtTime(1250, now + 1.5);
-        osc3.frequency.exponentialRampToValueAtTime(1500, now + 1.5);
+        osc.frequency.setValueAtTime(293.66, now + 0.6); // D4
+        osc2.frequency.setValueAtTime(369.99, now + 0.6); // F#4
+        osc3.frequency.setValueAtTime(440.00, now + 0.6); // A4
         
-        gainNode.gain.setValueAtTime(0.15, now);
-        gainNode.gain.linearRampToValueAtTime(0.2, now + 0.5);
-        gainNode.gain.linearRampToValueAtTime(0, now + 2.0);
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.linearRampToValueAtTime(3000, now + 1.5);
         
-        osc.start(now);
-        osc2.start(now);
-        osc3.start(now);
-        osc.stop(now + 2.0);
-        osc2.stop(now + 2.0);
-        osc3.stop(now + 2.0);
+        gainNode.gain.linearRampToValueAtTime(0.1, now + 0.4);
+        gainNode.gain.linearRampToValueAtTime(0, now + 3.0);
+        
+        osc.start(now); osc2.start(now); osc3.start(now);
+        osc.stop(now + 3.0); osc2.stop(now + 3.0); osc3.stop(now + 3.0);
         break;
+        
       case 'sell':
+        // A light, pleasant "cha-ching" style blip
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-        gainNode.gain.setValueAtTime(0.1, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+        osc.frequency.setValueAtTime(1000, now);
+        osc.frequency.exponentialRampToValueAtTime(1600, now + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0.05, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
         osc.start(now);
         osc.stop(now + 0.2);
         break;

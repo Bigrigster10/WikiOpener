@@ -151,6 +151,11 @@ export function CaseRoulette({ targetItem, activeCase, onFinish }: CaseRouletteP
   // plus half of its width (so the center of the item hits the center line).
   const targetX = -(TARGET_INDEX * FULL_ITEM_WIDTH) - (ITEM_WIDTH / 2) - extraOffset;
 
+  const onFinishRef = useRef(onFinish);
+  useEffect(() => {
+     onFinishRef.current = onFinish;
+  }, [onFinish]);
+
   useEffect(() => {
     const startTime = Date.now();
     const duration = 5500; // 5.5 seconds spin
@@ -184,14 +189,17 @@ export function CaseRoulette({ targetItem, activeCase, onFinish }: CaseRouletteP
     const finishTimeout = setTimeout(() => {
       setComplete(true);
       clearInterval(tickInterval);
-      onFinish();
+      if (onFinishRef.current) {
+          onFinishRef.current();
+      }
     }, duration + 500); // Add 500ms suspense before showing modal
 
     return () => {
       clearTimeout(finishTimeout);
       clearInterval(tickInterval);
     };
-  }, [targetX, onFinish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetX, FULL_ITEM_WIDTH]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-3xl overflow-hidden">

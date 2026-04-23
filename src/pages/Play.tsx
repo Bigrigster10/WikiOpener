@@ -21,7 +21,13 @@ export function Play() {
   const [sortOrder, setSortOrder] = useState('default');
   const [adModal, setAdModal] = useState<CaseType | null>(null);
   const [adPlaying, setAdPlaying] = useState(false);
+  const [adTimeLeft, setAdTimeLeft] = useState<number>(0);
   const [adCooldownRemaining, setAdCooldownRemaining] = useState<number>(0);
+  const [selectedFocuses, setSelectedFocuses] = useState<Record<string, string>>({});
+
+  const handleFocusChange = (caseId: string, focusQuery: string) => {
+    setSelectedFocuses(prev => ({ ...prev, [caseId]: focusQuery }));
+  };
 
   useEffect(() => {
     setSortOrder('default');
@@ -60,10 +66,19 @@ export function Play() {
   const handleWatchAd = (caseData: CaseType) => {
     setAdModal(caseData);
     setAdPlaying(true);
-    // Fake a 5 second ad
-    setTimeout(() => {
-      setAdPlaying(false);
-    }, 5000);
+    setAdTimeLeft(30);
+    
+    // Simulate a 30 second ad countdown
+    const timer = setInterval(() => {
+      setAdTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setAdPlaying(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const handleClaimAdReward = async () => {
@@ -164,13 +179,42 @@ export function Play() {
       const wearInfo = getWearInfo(durability);
       const value = calculateValue(rarity.id, wearInfo.multiplier, caseData);
       
-      const wikiData = await fetchRandomWikiArticle(caseData.category);
+      let title = "Unknown Item";
+      let image = "https://steamcommunity-a.akamaihd.net/economy/image/class/730/error";
+      let pageId = 0;
+
+      if (caseData.category === 'CS:GO' && caseData.csgoDrops) {
+         // Get the list of items for the specific rarity
+         let dropKey = rarity.id.toUpperCase().replace('-', '_');
+         if (dropKey === 'GOLD') dropKey = 'EXCEEDINGLY_RARE';
+         let options = caseData.csgoDrops[dropKey];
+         
+         // Fallback if that exact rarity is missing from csgoDrops but got rolled
+         if (!options || options.length === 0) {
+             options = Object.values(caseData.csgoDrops).flat();
+         }
+         
+         if (options && options.length > 0) {
+            const randomDrop = options[Math.floor(Math.random() * options.length)];
+            title = randomDrop.name;
+            image = randomDrop.image;
+         }
+      } else {
+         const focusQuery = caseData.focuses && caseData.focuses.length > 0
+           ? (selectedFocuses[caseId] || caseData.focuses[0].searchQuery)
+           : caseData.category;
+         
+         const wikiData = await fetchRandomWikiArticle(focusQuery);
+         title = wikiData.title;
+         image = wikiData.image;
+         pageId = wikiData.pageId;
+      }
 
       const newItem: Item = {
-        id: crypto.randomUUID(), // we need this to process the sell button safely
-        title: wikiData.title,
-        image: wikiData.image,
-        pageId: wikiData.pageId,
+        id: crypto.randomUUID(),
+        title,
+        image,
+        pageId,
         rarity: rarity.name,
         wear: wearInfo.label,
         durability,
@@ -418,16 +462,33 @@ export function Play() {
                       <span className="text-yellow-400">Premium Case</span>
                     ) : (
                       preferences.currency === 'CR' ? (
-                        <span>{c.cost.toLocaleString()} CR</span>
+                        <span>{c.cost === 0 ? 'FREE' : c.cost.toLocaleString() + ' CR'}</span>
                       ) : (
-                        <span>${c.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>${c.cost === 0 ? '0.00' : c.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       )
                     )}
                   </div>
                 </div>
 
+                {/* Focus Selector */}
+                {c.focuses && (
+                  <div className="w-full mt-1">
+                    <label className="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1 block">Selected Focus</label>
+                    <select 
+                      className="w-full bg-black/60 border border-white/10 rounded overflow-hidden p-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 appearance-none cursor-pointer"
+                      style={{ backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right .2rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em 1.2em`, paddingRight: `1.5rem` }}
+                      value={selectedFocuses[c.id] || c.focuses[0].searchQuery}
+                      onChange={(e) => handleFocusChange(c.id, e.target.value)}
+                    >
+                      {c.focuses.map(f => (
+                        <option key={f.id} value={f.searchQuery} className="bg-gray-900">{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {c.isPremium ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2">
                     <button
                       disabled={opening || adCooldownRemaining > 0}
                       onClick={() => handleWatchAd(c)}
@@ -689,8 +750,16 @@ export function Play() {
                 <Loader2 className="w-16 h-16 text-accent animate-spin absolute" />
               </div>
               <h2 className="text-3xl font-black mt-8 mb-4 uppercase tracking-tighter text-white">Ad Playing...</h2>
-              <p className="text-gray-400">Please wait while the advertisement finishes to receive your {adModal.name}.</p>
-              <p className="text-emerald-400 mt-4 font-bold animate-pulse">Remaining: 5 seconds</p>
+              <p className="text-gray-400">Please wait while the simulated advertisement finishes to receive your {adModal.name}.</p>
+              
+              <div className="mt-8 bg-gray-900 border border-white/10 rounded-lg p-6 w-full relative overflow-hidden">
+                <div 
+                  className="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-1000 ease-linear"
+                  style={{ width: `${((30 - adTimeLeft) / 30) * 100}%` }}
+                ></div>
+                <p className="text-xl font-mono text-emerald-400 font-bold mb-2">00:{adTimeLeft.toString().padStart(2, '0')}</p>
+                <p className="text-xs text-gray-500 uppercase tracking-widest">Remaining</p>
+              </div>
             </div>
           </motion.div>
         )}
