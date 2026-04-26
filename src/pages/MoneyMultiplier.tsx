@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, Zap, Skull, TrendingUp, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Zap, Skull, TrendingUp, AlertTriangle, Pause, Play } from 'lucide-react';
 
 interface GameState {
   status: 'idle' | 'playing' | 'cashed_out' | 'crashed';
+  isPaused: boolean;
   multiplier: number;
   bet: number;
   playerY: number;
@@ -20,6 +21,7 @@ export function MoneyMultiplier() {
   const { profile, preferences, payEntryFee, claimCashReward } = useGameStore();
   const [gameState, setGameState] = useState<GameState>({
     status: 'idle',
+    isPaused: false,
     multiplier: 1.0,
     bet: 10,
     playerY: 0,
@@ -76,6 +78,7 @@ export function MoneyMultiplier() {
 
     setGameState({
       status: 'playing',
+      isPaused: false,
       multiplier: 1.0,
       bet: bet,
       playerY: 0,
@@ -141,7 +144,7 @@ export function MoneyMultiplier() {
   };
 
   const hop = useCallback((dx: number, dy: number) => {
-    if (gameState.status !== 'playing') return;
+    if (gameState.status !== 'playing' || gameState.isPaused) return;
     const st = stateRef.current;
     
     // Limits
@@ -192,10 +195,18 @@ export function MoneyMultiplier() {
     if (st.rows[st.rows.length - 1].y < st.player.y + 15) {
        st.rows.push(...generateRows(st.rows[st.rows.length - 1].y + 1, 10));
     }
-  }, [gameState.status, gameState.comboActive]);
+  }, [gameState.status, gameState.isPaused, gameState.comboActive]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+          setGameState(p => {
+             if (p.status === 'playing') {
+                 return { ...p, isPaused: !p.isPaused };
+             }
+             return p;
+          });
+      }
       if (e.key === 'ArrowUp' || e.key === 'w') hop(0, 1);
       else if (e.key === 'ArrowDown' || e.key === 's') hop(0, -1);
       else if (e.key === 'ArrowLeft' || e.key === 'a') hop(-1, 0);
@@ -216,11 +227,12 @@ export function MoneyMultiplier() {
 
     const loop = (time: number) => {
       requestRef.current = requestAnimationFrame(loop);
-      const dt = (time - lastTime) / 1000;
+      let dt = (time - lastTime) / 1000;
       lastTime = time;
 
       const st = stateRef.current;
       if (gameState.status !== 'playing' && gameState.status !== 'crashed') return;
+      if (gameState.isPaused) dt = 0;
 
       // Update Shield Timer
       if (st.shieldTimer > 0) {
@@ -382,7 +394,7 @@ export function MoneyMultiplier() {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [gameState.status, gameState.intensity]);
+  }, [gameState.status, gameState.intensity, gameState.isPaused]);
 
   const cssFilter = `hue-rotate(${gameState.intensity * 90}deg) saturate(${100 + gameState.intensity * 100}%)`;
 
@@ -420,6 +432,15 @@ export function MoneyMultiplier() {
         {stateRef.current.velocitySurge && (
            <div className="absolute top-6 right-6 bg-red-500/20 text-red-500 border border-red-500/50 px-4 py-2 rounded-full flex items-center gap-2 animate-pulse">
               <AlertTriangle className="w-4 h-4" /> Velocity Surge
+           </div>
+        )}
+
+        {gameState.isPaused && gameState.status === 'playing' && (
+           <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm z-40">
+              <div className="text-center">
+                 <h2 className="text-6xl font-black text-white tracking-widest uppercase mb-4 opacity-80">Paused</h2>
+                 <p className="text-blue-400 font-mono text-xl uppercase">Click Cash Out to secure your winnings!</p>
+              </div>
            </div>
         )}
 
@@ -508,22 +529,36 @@ export function MoneyMultiplier() {
                  </span>
              </div>
 
-             <button 
-                onClick={handleCashOut}
-                disabled={gameState.status !== 'playing'}
-                className={`w-full py-5 rounded-2xl font-black uppercase tracking-widest text-xl transition-all ${
-                  gameState.status === 'playing'
-                     ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 hover:bg-emerald-400 relative overflow-hidden group'
-                     : 'bg-white/5 border border-white/5 text-white/20 cursor-not-allowed'
-                }`}
-             >
-                {gameState.status === 'playing' ? (
-                   <>
-                     <span className="relative z-10">Cash Out</span>
-                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]" />
-                   </>
-                ) : 'Cash Out'}
-             </button>
+             <div className="flex gap-2">
+                 <button 
+                    onClick={() => setGameState(p => ({ ...p, isPaused: !p.isPaused }))}
+                    disabled={gameState.status !== 'playing'}
+                    className={`p-5 rounded-2xl flex items-center justify-center transition-all flex-shrink-0 ${
+                      gameState.status === 'playing'
+                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30'
+                         : 'bg-white/5 border border-white/5 text-white/20 cursor-not-allowed'
+                    }`}
+                 >
+                    {gameState.isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
+                 </button>
+                 
+                 <button 
+                    onClick={handleCashOut}
+                    disabled={gameState.status !== 'playing'}
+                    className={`flex-1 py-5 rounded-2xl font-black uppercase tracking-widest text-xl transition-all ${
+                      gameState.status === 'playing'
+                         ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 hover:bg-emerald-400 relative overflow-hidden group'
+                         : 'bg-white/5 border border-white/5 text-white/20 cursor-not-allowed'
+                    }`}
+                 >
+                    {gameState.status === 'playing' ? (
+                       <>
+                         <span className="relative z-10">Cash Out</span>
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]" />
+                       </>
+                    ) : 'Cash Out'}
+                 </button>
+             </div>
          </div>
 
          <div className="bg-black/30 p-6 rounded-3xl border border-white/5 text-xs text-gray-500 space-y-3">

@@ -23,6 +23,7 @@ export function Battles() {
     const [botItems, setBotItems] = useState<Item[]>([]);
     const [round, setRound] = useState<number>(0);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [opponentName, setOpponentName] = useState<string>('BOT');
     
     // Result State
     const [battleResult, setBattleResult] = useState<'win' | 'loss' | 'tie' | null>(null);
@@ -124,9 +125,11 @@ export function Battles() {
                     // Decide my side and opponent side
                     const myItems = isHost ? data.p1Items : data.p2Items;
                     const oppItems = isHost ? data.p2Items : data.p1Items;
+                    const oppName = isHost ? (data.player2Name || 'Player 2') : (data.player1Name || 'Player 1');
                     
                     setUserItems(myItems);
                     setBotItems(oppItems);
+                    setOpponentName(oppName);
 
                     const myTotal = myItems.reduce((acc: any, i: any) => acc + i.value, 0);
                     const oppTotal = oppItems.reduce((acc: any, i: any) => acc + i.value, 0);
@@ -171,6 +174,7 @@ export function Battles() {
 
     const startBattle = async () => {
         setIsGenerating(true);
+        setOpponentName('BOT');
         // Generate User side
         const userSide = await generateBattleItems(selectedCase!, amount, profile?.pityCounter || 0, devForcedRarity, devForcedShiny);
         // Generate Bot side (bots don't get the user's pity buff, they start native)
@@ -400,7 +404,7 @@ export function Battles() {
                  </div>
 
                  <div className="flex flex-col items-center flex-1">
-                     <div className="text-[10px] uppercase font-black tracking-widest text-gray-500">BOT</div>
+                     <div className="text-[10px] uppercase font-black tracking-widest text-gray-500 max-w-[120px] truncate">{opponentName}</div>
                      <div className="text-2xl md:text-4xl font-mono font-black text-rose-500">{formatCurrency(botCurrentTotal)}</div>
                  </div>
              </div>
@@ -419,9 +423,9 @@ export function Battles() {
                          {isWinner ? "You Win!" : isLoser ? "You Lost" : "Tie Game"}
                      </h2>
                      <p className="text-gray-400 mb-4 max-w-lg">
-                         {isWinner ? "Wow. You completely swept the board. Both yours and the bot's items have been deposited directly into your inventory!" : 
-                          isLoser ? "The bot pulled more value than you did. You lose all items from this battle. Better luck next time." :
-                          "A perfect tie. You keep the items you pulled, but don't get the bot's."}
+                         {isWinner ? `Wow. You completely swept the board. Both yours and ${opponentMode === 'bot' ? "the bot's" : opponentName + "'s"} items have been deposited directly into your inventory!` : 
+                          isLoser ? `${opponentMode === 'bot' ? "The bot" : opponentName} pulled more value than you did. You lose all items from this battle. Better luck next time.` :
+                          `A perfect tie. You keep the items you pulled, but don't get ${opponentMode === 'bot' ? "the bot's" : opponentName + "'s"}.`}
                      </p>
 
                      {isWinner && (
