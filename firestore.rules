@@ -7,7 +7,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,35 +15,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128;
-    }
-
-    // User Profile Validation
-    function isValidUser(data) {
-      return data.userId is string &&
-             data.credits is number &&
-             data.netWorth is number &&
-             data.updatedAt is timestamp;
-    }
-
     match /users/{userId} {
       allow read: if true;
-      allow list: if true;
-      allow create: if isOwner(userId) && 
-                      request.resource.data.userId == userId;
-      allow update: if isOwner(userId) && 
-                      request.resource.data.userId == userId;
+      allow create, update: if isOwner(userId);
 
       match /inventory/{itemId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        allow read, create, update, delete: if isOwner(userId);
       }
     }
 
     // Global Stats (Jackpot)
-    match /stats/global {
+    match /stats/{statId} {
       allow read: if true;
       allow create, update: if isSignedIn();
     }
