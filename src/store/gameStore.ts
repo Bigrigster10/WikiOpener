@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, doc, onSnapshot, getDocs, getDoc, setDoc, query, orderBy, limit, runTransaction, serverTimestamp, increment } from 'firebase/firestore';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { Preferences, UserProfile, Item } from '../types';
@@ -107,55 +107,74 @@ export const useGameStore = create<GameState>((set, get) => {
       return;
     }
 
-    onAuthStateChanged(auth, async (user) => {
+    let unsubAuth: (() => void) | null = null;
+    let unsubStats: (() => void) | null = null;
+    let unsubProfile: (() => void) | null = null;
+    let unsubInv: (() => void) | null = null;
+
+    unsubAuth = onAuthStateChanged(auth, async (user) => {
+      // Cleanup previous listeners if any
+      if (unsubStats) unsubStats();
+      if (unsubProfile) unsubProfile();
+      if (unsubInv) unsubInv();
+      
       set({ user });
       if (user) {
         try {
           // Subscribe to global stats
           const statsRef = doc(db, 'stats', 'global');
-          onSnapshot(statsRef, (snap) => {
+          unsubStats = onSnapshot(statsRef, (snap) => {
             if (snap.exists()) {
               const data = snap.data();
               set({ jackpot: data.jackpot || 0, lastJackpotWinner: data.lastWinnerName || null });
             } else {
-              // Initial stats if not exists
-              setDoc(statsRef, { jackpot: 5000, updatedAt: serverTimestamp() }, { merge: true });
+              setDoc(statsRef, { jackpot: 5000, updatedAt: serverTimestamp() }, { merge: true })
+                .catch(err => handleFirestoreError(err, OperationType.WRITE, 'stats/global'));
             }
-          });
+          }, (err) => handleFirestoreError(err, OperationType.GET, 'stats/global'));
 
           // Ensure user doc exists
           const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
+          let userSnap;
+          try {
+            userSnap = await getDoc(userRef);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+          }
           
-          if (!userSnap.exists()) {
-            await setDoc(userRef, {
-              userId: user.uid,
-              displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'Anonymous'),
-              photoURL: user.photoURL || '',
-              credits: 0,
-              netWorth: 0,
-              casesOpened: 0,
-              battleWins: 0,
-              updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp() // Rule requires createdAt == request.time on create
-            });
+          if (userSnap && !userSnap.exists()) {
+            try {
+              await setDoc(userRef, {
+                userId: user.uid,
+                displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'Anonymous'),
+                photoURL: user.photoURL || '',
+                credits: 0,
+                netWorth: 0,
+                casesOpened: 0,
+                battleWins: 0,
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+              });
+            } catch (err) {
+              handleFirestoreError(err, OperationType.CREATE, `users/${user.uid}`);
+            }
           }
 
           // Subscribe to profile
-          onSnapshot(userRef, (docSnap) => {
+          unsubProfile = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
               set({ profile: docSnap.data() as UserProfile });
             }
-          });
+          }, (err) => handleFirestoreError(err, OperationType.GET, `users/${user.uid}`));
 
           // Subscribe to inventory
           const invRef = collection(db, `users/${user.uid}/inventory`);
-          onSnapshot(invRef, (snap) => {
+          unsubInv = onSnapshot(invRef, (snap) => {
             const inv: Item[] = [];
             snap.forEach(d => inv.push({ ...(d.data() as Item), id: d.id }));
-            inv.sort((a, b) => b.value - a.value); // Sort high value first
+            inv.sort((a, b) => b.value - a.value);
             set({ inventory: inv });
-          });
+          }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/inventory`));
           
           get().fetchLeaderboard();
         } catch (error) {
@@ -233,14 +252,14 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       await runTransaction(db, async (t) => {
         const userDoc = await t.get(userRef);
-        if (!userDoc.exists()) throw new Error("No user");
+        if (!userDoc.exists()) throw new Error("No user document found for the current authenticated user.");
         const data = userDoc.data();
         
         const cases = (await import('../lib/gameLogic')).CASES;
         const caseCost = costOverride !== undefined ? costOverride : (cases.find(c => c.id === caseId)?.cost || 0);
         
         if (data.credits < caseCost) {
-            throw new Error("Not enough credits");
+            throw new Error("Insufficient credits to open this case.");
         }
 
         const EXCEEDINGLY_RARE_NAME = 'Exceedingly Rare';
@@ -269,7 +288,7 @@ export const useGameStore = create<GameState>((set, get) => {
         jackpotResult = { wonJackpot, winAmount: finalJackpotWin };
 
         const newCredits = data.credits - caseCost + finalJackpotWin;
-        const newNetWorth = newCredits + itemData.value + get().inventory.reduce((acc, i) => acc + i.value, 0); // Not perfect (doesn't account for live inventory state in txn) but okay for this simple app
+        const newNetWorth = newCredits + itemData.value + get().inventory.reduce((acc, i) => acc + i.value, 0);
 
         t.update(userRef, {
           credits: newCredits,
@@ -291,8 +310,8 @@ export const useGameStore = create<GameState>((set, get) => {
         });
       });
       return jackpotResult;
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}/inventory`);
       throw e;
     }
   },
@@ -547,8 +566,8 @@ export const useGameStore = create<GameState>((set, get) => {
       const top: UserProfile[] = [];
       snaps.forEach(s => top.push(s.data() as UserProfile));
       set({ leaderboard: top });
-    } catch (e) {
-      console.error("Failed to fetch leaderboard", e);
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'users');
     }
   },
 

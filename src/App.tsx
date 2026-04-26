@@ -15,12 +15,28 @@ import { Legal } from './pages/Legal';
 import { About } from './pages/About';
 import { Battles } from './pages/Battles';
 import { useGameStore } from './store/gameStore';
+import { doc, getDocFromCache, getDocFromServer } from 'firebase/firestore';
+import { db } from './lib/firebase';
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'stats', 'global'));
+    console.log("Firestore connection verified.");
+  } catch (error: any) {
+    if (error.message?.includes('the client is offline') || error.code === 'unavailable') {
+      console.error("Please check your network connection or Firebase configuration.");
+    } else {
+      console.error("Firestore connectivity test failed:", error);
+    }
+  }
+}
 
 export default function App() {
   const { init } = useGameStore();
 
   useEffect(() => {
     init();
+    testConnection();
   }, [init]);
 
   return (

@@ -30,8 +30,18 @@
     <link rel="canonical" href="https://wikiopener.game/" />
 
     <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5447910249460954"
-     crossorigin="anonymous"></script>
+    <script>
+      (function() {
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5447910249460954";
+        script.crossOrigin = "anonymous";
+        script.onerror = function() {
+          console.log("AdSense blocked by client (ad-blocker active). This is expected if you use an ad-blocker.");
+        };
+        document.head.appendChild(script);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
