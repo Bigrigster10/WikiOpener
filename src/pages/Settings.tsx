@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { Settings as SettingsIcon, Palette, Monitor, Terminal, Key, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Palette, Monitor, Terminal, Key, Shield, Heart } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -82,6 +82,21 @@ export function Settings() {
     } catch (e) {
       console.error(e);
       alert('Failed to add credits.');
+    }
+  };
+
+  const handleGrantSupporter = async () => {
+    if (!user || !profile) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userRef, {
+        adsRemoved: true,
+        updatedAt: serverTimestamp()
+      });
+      alert('Successfully granted Supporter (Ads Removed) status!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to grant supporter status.');
     }
   };
 
@@ -241,6 +256,40 @@ export function Settings() {
           </div>
         </section>
 
+        {!profile?.adsRemoved && (
+          <section className="glass p-6 sm:p-8 flex flex-col gap-6 relative border-2 border-[#FF5E5B]/20">
+             <div className="absolute top-0 left-0 w-full h-full pointer-events-none bg-gradient-to-br from-[#FF5E5B]/5 to-transparent"></div>
+             <div className="flex items-center gap-3 border-b border-[#FF5E5B]/20 pb-4 relative z-10">
+               <div className="w-8 h-8 rounded-full bg-[#FF5E5B]/20 flex items-center justify-center text-[#FF5E5B]">
+                 <Heart className="w-4 h-4" />
+               </div>
+               <h3 className="text-xl font-bold uppercase tracking-widest text-[#FF5E5B]">Become a Supporter</h3>
+             </div>
+             
+             <div className="relative z-10 text-gray-400 text-sm">
+                 <p className="mb-4">
+                    Enjoying the app? Consider donating to support the developer. Supporters get exclusive visual themes and have all ads permanently removed!
+                 </p>
+                 <div className="flex flex-col sm:flex-row gap-4 items-center mt-6">
+                    <a 
+                       href="https://ko-fi.com/energyvault"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="px-6 py-3 bg-[#FF5E5B] hover:bg-[#FF5E5B]/80 text-white font-bold rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center gap-2"
+                    >
+                       <Heart className="w-4 h-4" /> Donate on Ko-fi
+                    </a>
+                    <button 
+                       onClick={handleGrantSupporter}
+                       className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/10 transition-colors"
+                    >
+                       I have donated (Claim Perks)
+                    </button>
+                 </div>
+             </div>
+          </section>
+        )}
+
         {profile?.adsRemoved && (
           <section className="glass p-6 sm:p-8 flex flex-col gap-6 border-2 border-amber-500/30 overflow-hidden relative">
             <div className="absolute -right-12 -top-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl"></div>
@@ -324,22 +373,28 @@ export function Settings() {
               </h4>
               <p className="text-sm text-gray-300">You are now operating with developer privileges. Use these tools carefully.</p>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                 <button 
                   onClick={() => handleGiveMoney(10000)}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors text-sm"
                 >
-                  Give 10,000 Credits
+                  Give 10,000 CR
                 </button>
                 <button 
                   onClick={() => handleGiveMoney(1000000)}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors text-sm"
                 >
-                  Give 1,000,000 Credits
+                  Give 1,000,000 CR
+                </button>
+                <button 
+                  onClick={handleGrantSupporter}
+                  className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors text-sm"
+                >
+                  Grant Supporter
                 </button>
                 <button 
                   onClick={handleResetMoney}
-                  className="bg-gray-800 border-2 border-red-500/50 hover:bg-gray-700 text-red-500 font-bold py-3 px-4 rounded-xl shadow-lg transition-colors"
+                  className="bg-gray-800 border-2 border-red-500/50 hover:bg-gray-700 text-red-500 font-bold py-3 px-4 rounded-xl shadow-lg transition-colors text-sm"
                 >
                   Reset Balance
                 </button>

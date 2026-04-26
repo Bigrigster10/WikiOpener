@@ -756,15 +756,12 @@ export function Play() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`fixed inset-0 z-[100] flex flex-col items-center p-4 backdrop-blur-xl overflow-y-auto ${
+            className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-xl overflow-y-auto ${
               reward.rarity === 'Exceedingly Rare' ? 'bg-yellow-500/20' : 
               reward.rarity === 'Covert' ? 'bg-red-900/40' : 
               'bg-black/80'
             }`}
           >
-            {/* spacer to help center the modal if less than full height */}
-            <div className="flex-grow shrink-0 h-4 min-h-[4vh]"></div>
-
             {/* Huge screen flash bang for high rarity items */}
             {(reward.rarity === 'Exceedingly Rare' || reward.rarity === 'Covert' || reward.rarity === 'Classified' || reward.rarity === 'Restricted') && (
               <motion.div
@@ -813,7 +810,7 @@ export function Play() {
               variants={getModalVariants(reward.rarity, reward.shinyType !== 'None')}
               initial="initial"
               animate="animate"
-              className={`glass max-w-lg w-full shadow-2xl flex flex-col overflow-hidden relative shrink-0 border-2 ${
+              className={`glass m-auto max-w-lg w-full shadow-2xl flex flex-col overflow-hidden relative shrink-0 border-2 ${
                 reward.rarity === 'Exceedingly Rare' ? 'border-yellow-400/50 shadow-[0_0_50px_rgba(250,204,21,0.3)]' :
                 reward.rarity === 'Covert' ? 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.3)]' :
                 rarityColorMap[reward.rarity]?.split(' ')?.[1] || 'border-gray-500'
@@ -949,9 +946,6 @@ export function Play() {
                 </div>
               </div>
             </motion.div>
-            
-            {/* bottom spacer to ensure scrolling creates space below modal */}
-            <div className="flex-grow shrink-0 h-10 min-h-[10vh]"></div>
           </motion.div>
         )}
       </AnimatePresence>

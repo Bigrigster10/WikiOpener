@@ -26,18 +26,12 @@ export function Layout() {
   const handlePurchaseRemoveAds = async () => {
     setProcessingState('processing');
     setTimeout(async () => {
-      const success = await useGameStore.getState().purchaseRemoveAds();
-      if (success) {
-        setProcessingState('success');
-        setTimeout(() => {
-          setShowPaymentModal(false);
-          setProcessingState('idle');
-          window.open('https://ko-fi.com/energyvault', '_blank');
-        }, 2000);
-      } else {
-        alert("Failed to process payment. Please try again.");
+      window.open('https://ko-fi.com/energyvault', '_blank');
+      setProcessingState('success');
+      setTimeout(() => {
+        setShowPaymentModal(false);
         setProcessingState('idle');
-      }
+      }, 2000);
     }, 1500);
   };
 
@@ -290,8 +284,11 @@ export function Layout() {
 
             {processingState === 'idle' && (
               <div className="space-y-3">
-                <button 
-                  onClick={handlePurchaseRemoveAds}
+                <a 
+                  href="https://ko-fi.com/energyvault"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setShowPaymentModal(false)}
                   className="w-full flex items-center p-4 rounded-xl border border-white/10 bg-[#FF5E5B]/10 hover:bg-[#FF5E5B]/20 transition-all text-left group"
                 >
                   <div className="w-10 h-10 rounded-full bg-[#FF5E5B] flex items-center justify-center mr-4 shadow-lg shrink-0 group-hover:scale-110 transition-transform">
@@ -299,12 +296,12 @@ export function Layout() {
                   </div>
                   <div className="flex-1">
                     <div className="font-bold text-white text-sm">Donate on Ko-fi</div>
-                    <div className="text-[10px] text-gray-400">Unlock "No Ads" instantly!</div>
+                    <div className="text-[10px] text-gray-400">Support the app and get Supporter status!</div>
                   </div>
                   <ExternalLink className="w-4 h-4 text-gray-500 group-hover:text-white" />
-                </button>
+                </a>
                 <div className="text-[10px] text-gray-500 text-center mt-4">
-                   (Note: clicking the button above will simulate a payment and instantly remove ads for this demonstration)
+                   (Note: Since this is an external service, you will need to manually grant yourself Supporter Status in the Settings menu after donating!)
                 </div>
               </div>
             )}

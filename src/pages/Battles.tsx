@@ -6,12 +6,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Swords, User, Bot, Loader2, Sparkles, AlertTriangle, ChevronRight, X, Trophy } from 'lucide-react';
 import { playSound } from '../lib/sounds';
 import { ShinyEffect } from '../components/ShinyEffect';
+import { db } from '../lib/firebase';
+import { collection, doc, query, where, getDocs, setDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
 
 type BattleState = 'setup' | 'matchmaking' | 'battle' | 'result';
 
 export function Battles() {
     const { user, profile, preferences, executeBattle, devForcedRarity, devForcedShiny } = useGameStore();
-    
+
     const [battleState, setBattleState] = useState<BattleState>('setup');
     const [selectedCase, setSelectedCase] = useState<CaseType | null>(null);
     const [amount, setAmount] = useState<number>(1);
@@ -35,18 +37,139 @@ export function Battles() {
           : '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
       };
 
+    const activeBattleRef = useRef<(() => void) | null>(null);
+
     const handleStartMatchmaking = async () => {
-        if (!selectedCase || !canAfford) return;
+        if (!selectedCase || !canAfford || !user) return;
         setBattleState('matchmaking');
         
-        // Matchmaking delay simulation
-        setTimeout(async () => {
-            if (opponentMode === 'player') {
-                // If they picked player, warn them and switch to bot
-                setOpponentMode('bot');
+        if (opponentMode === 'bot') {
+            setTimeout(async () => {
+                startBattle();
+            }, 500);
+            return;
+        }
+
+        // Multiplayer Matchmaking
+        try {
+            const battlesCol = collection(db, 'battles');
+            const q = query(battlesCol, 
+                where('status', '==', 'waiting'), 
+                where('caseId', '==', selectedCase.id), 
+                where('amount', '==', amount)
+            );
+            
+            const snaps = await getDocs(q);
+            let joinedId: string | null = null;
+            let isHost = false;
+
+            // Try to join an existing one
+            for (const docSnap of snaps.docs) {
+                if (docSnap.data().player1 !== user.uid) { // don't join your own lobby
+                    try {
+                        await runTransaction(db, async (t) => {
+                            const fresh = await t.get(docSnap.ref);
+                            if (fresh.data()?.status === 'waiting') {
+                                t.update(docSnap.ref, { 
+                                    status: 'playing', 
+                                    player2: user.uid, 
+                                    player2Name: profile?.displayName || 'Player 2' 
+                                });
+                                joinedId = docSnap.id;
+                            }
+                        });
+                        if (joinedId) break;
+                    } catch (e) {
+                         // failed to join this one, try next
+                    }
+                }
             }
-            startBattle();
-        }, opponentMode === 'player' ? 3000 : 500);
+
+            // Create new if none available
+            if (!joinedId) {
+                isHost = true;
+                const newRef = doc(battlesCol);
+                await setDoc(newRef, {
+                    status: 'waiting',
+                    caseId: selectedCase.id,
+                    amount,
+                    player1: user.uid,
+                    player1Name: profile?.displayName || 'Player 1',
+                    createdAt: serverTimestamp()
+                });
+                joinedId = newRef.id;
+            }
+
+            // Listen to this lobby
+            activeBattleRef.current = onSnapshot(doc(db, 'battles', joinedId), async (snap) => {
+                const data = snap.data();
+                if (!data) return;
+
+                if (data.status === 'playing' && isHost && !data.p1Items) {
+                    setIsGenerating(true);
+                    // Host generates items
+                    const p1Side = await generateBattleItems(selectedCase, amount, profile?.pityCounter || 0, devForcedRarity, devForcedShiny);
+                    const p2Side = await generateBattleItems(selectedCase, amount, 0); // Player 2 pity tracking can be added later, assuming 0 for now to keep sync simple
+                    
+                    await updateDoc(snap.ref, {
+                        p1Items: p1Side.items,
+                        p2Items: p2Side.items,
+                        p1Pity: p1Side.finalPity,
+                        status: 'resolved'
+                    });
+                } else if (data.status === 'resolved') {
+                    if (activeBattleRef.current) {
+                        activeBattleRef.current(); // unsubscribe
+                        activeBattleRef.current = null;
+                    }
+                    
+                    setIsGenerating(false);
+                    // Decide my side and opponent side
+                    const myItems = isHost ? data.p1Items : data.p2Items;
+                    const oppItems = isHost ? data.p2Items : data.p1Items;
+                    
+                    setUserItems(myItems);
+                    setBotItems(oppItems);
+
+                    const myTotal = myItems.reduce((acc: any, i: any) => acc + i.value, 0);
+                    const oppTotal = oppItems.reduce((acc: any, i: any) => acc + i.value, 0);
+
+                    let wonItems: Item[] = [];
+                    let rResult: 'win' | 'loss' | 'tie' = 'tie';
+                    let cashPrize = 0;
+                    if (myTotal > oppTotal) {
+                        wonItems = [...myItems, ...oppItems];
+                        rResult = 'win';
+                        cashPrize = totalCost; // Refund their entry cost
+                    } else if (myTotal < oppTotal) {
+                        wonItems = [];
+                        rResult = 'loss';
+                    } else {
+                        wonItems = [...myItems];
+                        rResult = 'tie';
+                    }
+
+                    // Only host gets pity updated from generating function, player 2 relies on fallback
+                    const newPity = isHost ? data.p1Pity : (profile?.pityCounter || 0);
+                    
+                    const success = await executeBattle(totalCost, amount, wonItems, newPity, rResult === 'win', cashPrize);
+                    
+                    if (success) {
+                        setBattleResult(rResult);
+                        setBattleState('battle');
+                        setRound(0); // Start animation loop
+                    } else {
+                        alert("Failed to start battle. Check balance.");
+                        setBattleState('setup');
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.error(e);
+            alert("Matchmaking error");
+            setBattleState('setup');
+        }
     };
 
     const startBattle = async () => {
@@ -222,6 +345,14 @@ export function Battles() {
         );
     }
 
+    const cancelMatchmaking = () => {
+        if (activeBattleRef.current) {
+            activeBattleRef.current(); // unsubscribe
+            activeBattleRef.current = null;
+        }
+        setBattleState('setup');
+    };
+
     if (battleState === 'matchmaking') {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
@@ -230,18 +361,12 @@ export function Battles() {
                 {opponentMode === 'player' && (
                     <div className="text-gray-400 max-w-sm">Searching for an opponent looking for <span className="text-white">{selectedCase?.name} x{amount}</span></div>
                 )}
-                {opponentMode === 'bot' && (
-                    <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-4 rounded-xl flex items-center justify-center gap-3 text-sm font-bold">
-                        <AlertTriangle className="w-5 h-5 shrink-0" />
-                        <div className="text-left">
-                            <div>No players found online.</div>
-                            <div className="text-yellow-500/70 text-xs">Switching to Bot Opponent...</div>
-                        </div>
-                    </motion.div>
-                )}
                 {isGenerating && (
                     <div className="text-accent text-sm uppercase tracking-widest font-bold mt-4 animate-pulse">Generating Artifacts...</div>
                 )}
+                <button onClick={cancelMatchmaking} className="mt-4 px-6 py-2 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded-lg text-sm font-bold transition-colors">
+                    Cancel
+                </button>
             </div>
         );
     }

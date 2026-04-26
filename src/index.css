@@ -295,6 +295,29 @@
   --screen-filter: repeating-linear-gradient(0deg, rgba(0,0,0,0.05), rgba(0,0,0,0.05) 1px, transparent 1px, transparent 2px);
 }
 
+[data-theme="gold-supporter"] {
+  --bg-color: #1a1400; --text-color: #fef3c7; --text-muted: #d97706;
+  --mesh-1: #332800; --mesh-2: #4d3c00; --mesh-3: #1a1400; --mesh-4: #050400;
+  --glass-bg: rgba(251, 191, 36, 0.05); --glass-border: rgba(251, 191, 36, 0.3); --accent: #fbbf24;
+  --pattern-bg: radial-gradient(circle, rgba(251, 191, 36, 0.1) 1.5px, transparent 1.5px);
+  --pattern-size: 25px 25px; --pattern-opacity: 1;
+}
+
+[data-theme="platinum-supporter"] {
+  --bg-color: #111827; --text-color: #ffffff; --text-muted: #9ca3af;
+  --mesh-1: #1f2937; --mesh-2: #374151; --mesh-3: #111827; --mesh-4: #030712;
+  --glass-bg: rgba(226, 232, 240, 0.05); --glass-border: rgba(226, 232, 240, 0.3); --accent: #e2e8f0;
+  --pattern-bg: linear-gradient(rgba(226, 232, 240, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(226, 232, 240, 0.05) 1px, transparent 1px);
+  --pattern-size: 30px 30px; --pattern-opacity: 1;
+}
+
+[data-theme="ruby-supporter"] {
+  --bg-color: #1a0000; --text-color: #fee2e2; --text-muted: #b91c1c;
+  --mesh-1: #330000; --mesh-2: #4d0000; --mesh-3: #1a0000; --mesh-4: #000000;
+  --glass-bg: rgba(255, 0, 0, 0.05); --glass-border: rgba(255, 0, 0, 0.4); --accent: #ff0000;
+  --screen-filter: radial-gradient(circle, transparent 20%, rgba(30,0,0,0.95) 120%);
+}
+
 body {
   background-color: var(--bg-color);
   font-family: var(--font-sans);

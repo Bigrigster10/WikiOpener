@@ -4,8 +4,11 @@ import { useGameStore } from '../store/gameStore';
 import { Item } from '../types';
 import { fetchRandomWikiArticle, RARITIES } from '../lib/gameLogic';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowUpRight, ShieldAlert, Sparkles, RefreshCcw, FileSignature, Swords, ChevronLeft, Gamepad2 } from 'lucide-react';
+import { ArrowUpRight, ShieldAlert, Sparkles, RefreshCcw, FileSignature, Swords, ChevronLeft, Gamepad2, Ticket, Target } from 'lucide-react';
 import { Battles } from './Battles';
+import { ScratchTickets } from './ScratchTickets';
+import { JackpotPool } from './JackpotPool';
+import { BombDefuse } from './BombDefuse';
 
 export function Minigames() {
   const location = useLocation();
@@ -37,6 +40,12 @@ export function Minigames() {
               );
           case 'battles':
               return <div className="mt-6 flex-1 flex flex-col"><Battles /></div>;
+          case 'scratch':
+              return <div className="mt-6 flex-1 flex flex-col"><ScratchTickets /></div>;
+          case 'jackpot':
+              return <div className="mt-6 flex-1 flex flex-col"><JackpotPool /></div>;
+          case 'bombdefuse':
+              return <div className="mt-6 flex-1 flex flex-col"><BombDefuse /></div>;
           default:
               return (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -77,7 +86,7 @@ export function Minigames() {
                       {/* Case Battles Tile */}
                       <button 
                         onClick={() => setActiveGame('battles')}
-                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-red-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-red-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1"
                       >
                           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex flex-col items-center justify-center shrink-0 border border-red-500/20">
@@ -87,6 +96,57 @@ export function Minigames() {
                               <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Case Battles</h3>
                               <p className="text-gray-400 text-sm leading-relaxed">
                                   Go head-to-head in a high stakes box opening. The player who unpacks the most total value keeps absolutely everything.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Scratch Tickets */}
+                      <button 
+                        onClick={() => setActiveGame('scratch')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-green-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(34,197,94,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-green-500/20 flex flex-col items-center justify-center shrink-0 border border-green-500/20">
+                              <Ticket className="w-7 h-7 text-green-500" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Scratch Tickets</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  Buy a ticket with your credits and scratch to match 3 symbols. Win up to a 100X payout instantly.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Jackpot Pool */}
+                      <button 
+                        onClick={() => setActiveGame('jackpot')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-[#10b981]/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#10b981]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-[#10b981]/20 flex flex-col items-center justify-center shrink-0 border border-[#10b981]/20">
+                              <Target className="w-7 h-7 text-[#10b981]" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Jackpot Pool</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  Multiplayer winner-takes-all! Deposit items to be entered into a spin. The more you risk, the better your odds.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Bomb Defuse */}
+                      <button 
+                        onClick={() => setActiveGame('bombdefuse')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-red-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex flex-col items-center justify-center shrink-0 border border-red-500/20">
+                              <Target className="w-7 h-7 text-red-500" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Bomb Defuse</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  High stakes memory game. Defuse 20 bombs by memorizing sequences and cutting wires for a huge payout.
                               </p>
                           </div>
                       </button>

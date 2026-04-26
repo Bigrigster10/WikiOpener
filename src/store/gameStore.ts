@@ -32,9 +32,13 @@ interface GameState {
   recordAdWatch: () => Promise<void>;
   purchaseRemoveAds: () => Promise<boolean>;
   addBotJackpotContribution: (simulatedValue: number, isExceedinglyRare?: boolean) => Promise<void>;
+  playScratchTicket: (cost: number) => Promise<{ winAmount: number, spaces: number[] }>;
+  executeJackpotLobby: (wageredItems: Item[], allPotItems: Item[], didWin: boolean) => Promise<boolean>;
+  payEntryFee: (cost: number) => Promise<boolean>;
+  claimCashReward: (amount: number) => Promise<boolean>;
 }
 
-const isDevMode = typeof window !== 'undefined' && (window.location.hostname.includes('.run.app') || window.location.hostname === 'localhost');
+const isDevMode = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.self !== window.top);
 const mockUserId = 'dev-studio-user';
 
 export const useGameStore = create<GameState>((set, get) => {
@@ -206,7 +210,7 @@ export const useGameStore = create<GameState>((set, get) => {
         // Jackpot logic for dev mode
         const jackStr = localStorage.getItem('dev-mock-jackpot');
         let jackpotData = jackStr ? JSON.parse(jackStr) : { jackpot: 5000, lastWinnerName: null };
-        const contribution = caseCost * 0.02;
+        const contribution = itemData.rarity === 'Exceedingly Rare' ? itemData.value * 0.01 : caseCost * 0.02;
         jackpotData.jackpot += contribution;
 
         let wonJackpot = false;
@@ -273,7 +277,7 @@ export const useGameStore = create<GameState>((set, get) => {
         const statsRef = doc(db, 'stats', 'global');
         const statsSnap = await t.get(statsRef);
         let currentJackpot = statsSnap.exists() ? (statsSnap.data().jackpot || 0) : 5000;
-        const contribution = caseCost * 0.02;
+        const contribution = itemData.rarity === EXCEEDINGLY_RARE_NAME ? itemData.value * 0.01 : caseCost * 0.02;
         let nextJackpot = currentJackpot + contribution;
 
         if (itemData.rarity === EXCEEDINGLY_RARE_NAME) {
@@ -298,11 +302,15 @@ export const useGameStore = create<GameState>((set, get) => {
           updatedAt: serverTimestamp()
         });
 
-        t.set(statsRef, {
+        const statsUpdate: any = {
           jackpot: nextJackpot,
-          lastWinnerName: wonJackpot ? (profile.displayName || "Anonymous") : (statsSnap.exists() ? (statsSnap.data().lastWinnerName || null) : null),
           updatedAt: serverTimestamp()
-        }, { merge: true });
+        };
+        if (wonJackpot) {
+          statsUpdate.lastWinnerName = profile.displayName || "Anonymous";
+        }
+
+        t.set(statsRef, statsUpdate, { merge: true });
 
         t.set(itemRef, {
           ...finalItemData,
@@ -491,6 +499,63 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  executeJackpotLobby: async (wageredItems: Item[], allPotItems: Item[], didWin: boolean) => {
+    const { user, profile, inventory } = get();
+    if (!user || !profile) return false;
+
+    const wageredIds = wageredItems.map(i => i.id!);
+
+    if (isDevMode) {
+        let newInv = inventory.filter(i => !wageredIds.includes(i.id!));
+        if (didWin) {
+            newInv = [...allPotItems.map(i => ({...i, id: i.id || crypto.randomUUID()})), ...newInv];
+        }
+        const newNetWorth = profile.credits + newInv.reduce((acc, i) => acc + i.value, 0);
+        const newProfile = { ...profile, netWorth: newNetWorth };
+        
+        localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+        localStorage.setItem('dev-mock-inventory', JSON.stringify(newInv));
+        set({ profile: newProfile, inventory: newInv });
+        return true;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    try {
+        await runTransaction(db, async (t) => {
+            const userDoc = await t.get(userRef);
+            if (!userDoc.exists()) throw new Error("No user");
+            const data = userDoc.data();
+
+            for (const id of wageredIds) {
+                t.delete(doc(db, `users/${user.uid}/inventory`, id));
+            }
+            
+            let gainedValue = 0;
+            if (didWin) {
+                for (const item of allPotItems) {
+                    const id = crypto.randomUUID();
+                    t.set(doc(db, `users/${user.uid}/inventory`, id), {
+                        ...item, id, acquiredAt: serverTimestamp()
+                    });
+                    gainedValue += item.value;
+                }
+            }
+
+            const lostValue = wageredItems.reduce((acc, i) => acc + i.value, 0);
+            const newNetWorth = data.credits + get().inventory.reduce((acc, i) => acc + i.value, 0) - lostValue + gainedValue;
+
+            t.update(userRef, {
+                netWorth: newNetWorth,
+                updatedAt: serverTimestamp()
+            });
+        });
+        return true;
+    } catch(e: any) {
+        handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
+        return false;
+    }
+  },
+
   executeBattle: async (totalCost: number, amountOpened: number, wonItems: Item[], newPity: number, wonBattle: boolean, cashPrize: number = 0) => {
     const { user, profile, inventory } = get();
     if (!user || !profile) return false;
@@ -615,9 +680,9 @@ export const useGameStore = create<GameState>((set, get) => {
     const { user } = get();
     if (!user) return;
     
-    // If it's incredibly rare, deposit a much larger portion (e.g. 5%) into the jackpot
+    // If it's incredibly rare, deposit a much larger portion (1%) into the jackpot
     // Otherwise, just a tiny fraction
-    const contribution = isExceedinglyRare ? simulatedValue * 0.05 : simulatedValue * 0.0005;
+    const contribution = isExceedinglyRare ? simulatedValue * 0.01 : simulatedValue * 0.0005;
 
     if (isDevMode) {
       const jackStr = localStorage.getItem('dev-mock-jackpot');
@@ -637,6 +702,156 @@ export const useGameStore = create<GameState>((set, get) => {
       }, { merge: true });
     } catch (error) {
        // silently fail for bot contributions
+    }
+  },
+
+  claimCashReward: async (amount: number) => {
+    const { user, profile } = get();
+    if (!user || !profile || amount <= 0) return false;
+
+    if (isDevMode) {
+      const newCredits = profile.credits + amount;
+      const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+      const newProfile = { ...profile, credits: newCredits, netWorth: newNetWorth };
+      localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+      set({ profile: newProfile });
+      return true;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await runTransaction(db, async (t) => {
+        const userDoc = await t.get(userRef);
+        if (!userDoc.exists()) throw new Error("No user");
+        const data = userDoc.data();
+        
+        const newCredits = data.credits + amount;
+        const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+
+        t.update(userRef, {
+            credits: newCredits,
+            netWorth: newNetWorth,
+            updatedAt: serverTimestamp()
+        });
+      });
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  payEntryFee: async (cost: number) => {
+    const { user, profile } = get();
+    if (!user || !profile || profile.credits < cost) return false;
+
+    if (isDevMode) {
+      const newCredits = profile.credits - cost;
+      const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+      const newProfile = { ...profile, credits: newCredits, netWorth: newNetWorth };
+      localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+      set({ profile: newProfile });
+      return true;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await runTransaction(db, async (t) => {
+        const userDoc = await t.get(userRef);
+        if (!userDoc.exists()) throw new Error("No user");
+        const data = userDoc.data();
+        if (data.credits < cost) throw new Error("Not enough credits");
+        
+        const newCredits = data.credits - cost;
+        const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+
+        t.update(userRef, {
+            credits: newCredits,
+            netWorth: newNetWorth,
+            updatedAt: serverTimestamp()
+        });
+      });
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  playScratchTicket: async (cost: number) => {
+    const { user, profile } = get();
+    if (!user || !profile || profile.credits < cost) return { winAmount: 0, spaces: Array(9).fill(0) };
+
+    const possiblePrizes = [cost, cost * 2, cost * 5, cost * 10, cost * 20, cost * 100];
+    const winProbabilities = [0.15, 0.05, 0.01, 0.005, 0.001, 0.0001]; // Expected Value roughly 0.53
+
+    let wonAmount = 0;
+    
+    const roll = Math.random();
+    let cumulative = 0;
+    for (let i = 0; i < winProbabilities.length; i++) {
+        cumulative += winProbabilities[i];
+        if (roll < cumulative) {
+            wonAmount = possiblePrizes[i];
+            break;
+        }
+    }
+
+    // Generate spaces
+    let spaces: number[] = [];
+    if (wonAmount > 0) {
+        // Must contain 3 of the wonAmount, and random others
+        spaces = [wonAmount, wonAmount, wonAmount];
+        while (spaces.length < 9) {
+            const randomPrize = possiblePrizes[Math.floor(Math.random() * possiblePrizes.length)];
+            const count = spaces.filter(s => s === randomPrize).length;
+            if (count < 2 || randomPrize === wonAmount && count < 3) {
+                spaces.push(randomPrize);
+            }
+        }
+    } else {
+        // Loser, at most 2 of any
+        while (spaces.length < 9) {
+            const randomPrize = possiblePrizes[Math.floor(Math.random() * possiblePrizes.length)];
+            const count = spaces.filter(s => s === randomPrize).length;
+            if (count < 2) {
+                spaces.push(randomPrize);
+            }
+        }
+    }
+    // Shuffle
+    spaces.sort(() => Math.random() - 0.5);
+
+    if (isDevMode) {
+      const newCredits = profile.credits - cost + wonAmount;
+      const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+      const newProfile = { ...profile, credits: newCredits, netWorth: newNetWorth };
+      localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+      set({ profile: newProfile });
+      return { winAmount: wonAmount, spaces };
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await runTransaction(db, async (t) => {
+        const userDoc = await t.get(userRef);
+        if (!userDoc.exists()) throw new Error("No user");
+        const data = userDoc.data();
+        if (data.credits < cost) throw new Error("Not enough credits");
+        
+        const newCredits = data.credits - cost + wonAmount;
+        const newNetWorth = newCredits + get().inventory.reduce((acc, i) => acc + i.value, 0);
+
+        t.update(userRef, {
+            credits: newCredits,
+            netWorth: newNetWorth,
+            updatedAt: serverTimestamp()
+        });
+      });
+      return { winAmount: wonAmount, spaces };
+    } catch (e) {
+      console.error(e);
+      return { winAmount: 0, spaces: Array(9).fill(0) };
     }
   }
 
