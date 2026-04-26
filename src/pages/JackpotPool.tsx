@@ -4,6 +4,9 @@ import { Item } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Coins, Plus, Swords, User as UserIcon, RefreshCcw, X, Target } from 'lucide-react';
 import { fetchRandomWikiArticle } from '../lib/gameLogic';
+import { db } from '../lib/firebase';
+import { collection, doc, query, where, getDocs, setDoc, updateDoc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { Bot, Loader2 } from 'lucide-react';
 
 interface PlayerInPool {
     id: string;
@@ -18,7 +21,12 @@ const BOT_NAMES = ['CryptoKing', 'LootGoblin', 'SniperPro', 'DiamondHandz', 'xX_
 const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 export function JackpotPool() {
-  const { profile, inventory, executeJackpotLobby } = useGameStore();
+  const { user, profile, inventory, executeJackpotLobby } = useGameStore();
+  const [opponentMode, setOpponentMode] = useState<'player' | 'bot'>('bot');
+  const activeLobbyRef = useRef<(() => void) | null>(null);
+  const [joinedLobbyId, setJoinedLobbyId] = useState<string | null>(null);
+  const [hostId, setHostId] = useState<string | null>(null);
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
   const [gameState, setGameState] = useState<'setup' | 'countdown' | 'spinning' | 'result'>('setup');
   
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -40,7 +48,21 @@ export function JackpotPool() {
       baseValueRef.current = myTotalValue || 500;
   }, [myTotalValue]);
 
-  const resetGame = () => {
+  const resetGame = async () => {
+      if (activeLobbyRef.current) {
+          activeLobbyRef.current();
+          activeLobbyRef.current = null;
+          if (hostId === user?.uid && joinedLobbyId) {
+             try {
+                await updateDoc(doc(db, 'jackpot_lobbies', joinedLobbyId), {
+                    status: 'cancelled'
+                });
+             } catch(e) {}
+          }
+      }
+      setIsMatchmaking(false);
+      setJoinedLobbyId(null);
+      setHostId(null);
       setGameState('setup');
       setSelectedItemIds([]);
       setPlayers([]);
@@ -52,18 +74,25 @@ export function JackpotPool() {
   useEffect(() => {
      if (gameState === 'countdown') {
          const timer = setInterval(() => {
-             setTimeLeft(prev => {
-                 if (prev <= 1) {
-                     clearInterval(timer);
-                     startSpin();
-                     return 0;
-                 }
-                 return prev - 1;
-             });
+             // Only decrement if we have enough players
+             if (opponentMode === 'bot' || players.length >= 2) {
+                 setTimeLeft(prev => {
+                     if (prev <= 1) {
+                         clearInterval(timer);
+                         if (opponentMode === 'bot') {
+                             startSpin();
+                         } else if (hostId === user?.uid && joinedLobbyId) {
+                             startSpinHost();
+                         }
+                         return 0;
+                     }
+                     return prev - 1;
+                 });
+             }
          }, 1000);
 
          const botInterval = setInterval(() => {
-             if (Math.random() < 0.3 && players.length < 5) {
+             if (opponentMode === 'bot' && Math.random() < 0.3 && players.length < 5) {
                  joinBot();
              }
          }, 2000);
@@ -74,7 +103,7 @@ export function JackpotPool() {
          };
      }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState, players.length]);
+  }, [gameState, players.length, opponentMode, hostId, joinedLobbyId]);
 
   const joinBot = async () => {
       const numItems = Math.floor(Math.random() * 4) + 1;
@@ -144,21 +173,172 @@ export function JackpotPool() {
       });
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
       if (selectedItems.length === 0) return;
       
       const me: PlayerInPool = {
-          id: 'me',
+          id: user?.uid || 'me',
           name: profile?.displayName || 'You',
-          color: '#fbbf24',
+          color: COLORS[Math.floor(Math.random() * COLORS.length)],
           items: selectedItems,
           totalValue: myTotalValue
       };
 
-      setPlayers([me]);
-      setGameState('countdown');
+      if (opponentMode === 'bot') {
+          setPlayers([me]);
+          setGameState('countdown');
+          setTimeout(() => joinBot(), 500);
+          return;
+      }
+
+      // Multiplayer Matchmaking
+      if (!user) return;
+      setIsMatchmaking(true);
       
-      setTimeout(() => joinBot(), 500);
+      try {
+          const lobbiesCol = collection(db, 'jackpot_lobbies');
+          const qWaiting = query(lobbiesCol, where('status', '==', 'waiting'));
+          const wSnaps = await getDocs(qWaiting);
+          
+          let jId: string | null = null;
+          let hId: string | null = null;
+          
+          for (const docSnap of wSnaps.docs) {
+              try {
+                  await runTransaction(db, async (t) => {
+                      const fresh = await t.get(docSnap.ref);
+                      const d = fresh.data();
+                      if (d && (d.status === 'waiting' || (d.status === 'countdown' && d.players.length < 10))) {
+                          const existingPlayers = d.players || [];
+                          if (!existingPlayers.find((p: any) => p.id === user.uid)) {
+                              const newPlayers = [...existingPlayers, me];
+                              t.update(docSnap.ref, { 
+                                  players: newPlayers,
+                                  status: newPlayers.length >= 2 ? 'countdown' : 'waiting',
+                              });
+                              jId = docSnap.id;
+                              hId = d.hostId;
+                          }
+                      }
+                  });
+                  if (jId) break;
+              } catch(e) {}
+          }
+
+          if (!jId) {
+              const qCount = query(lobbiesCol, where('status', '==', 'countdown'));
+              const cSnaps = await getDocs(qCount);
+              for (const docSnap of cSnaps.docs) {
+                  try {
+                      await runTransaction(db, async (t) => {
+                          const fresh = await t.get(docSnap.ref);
+                          const d = fresh.data();
+                          if (d && d.status === 'countdown' && d.players.length < 10) {
+                              const existingPlayers = d.players || [];
+                              if (!existingPlayers.find((p: any) => p.id === user.uid)) {
+                                  t.update(docSnap.ref, { players: [...existingPlayers, me] });
+                                  jId = docSnap.id;
+                                  hId = d.hostId;
+                              }
+                          }
+                      });
+                      if (jId) break;
+                  } catch(e) {}
+              }
+          }
+
+          if (!jId) {
+              const newRef = doc(lobbiesCol);
+              await setDoc(newRef, {
+                  status: 'waiting',
+                  players: [me],
+                  hostId: user.uid,
+                  createdAt: serverTimestamp()
+              });
+              jId = newRef.id;
+              hId = user.uid;
+          }
+
+          setJoinedLobbyId(jId);
+          setHostId(hId);
+
+          activeLobbyRef.current = onSnapshot(doc(db, 'jackpot_lobbies', jId), (snap) => {
+              const data = snap.data();
+              if (!data) return;
+              
+              if (data.players) {
+                  setPlayers(data.players);
+              }
+
+              if (data.status === 'countdown') {
+                 setIsMatchmaking(false);
+                 setGameState('countdown');
+              } else if (data.status === 'spinning') {
+                 setIsMatchmaking(false);
+                 setGameState('spinning');
+                 if (data.winnerId && data.rouletteItems) {
+                     const winP = data.players.find((p: any) => p.id === data.winnerId);
+                     if (winP) setWinner(winP);
+                     setRouletteItems(data.rouletteItems);
+                     
+                     setTimeout(() => {
+                         finishGame(winP || data.players[0]);
+                     }, 6000);
+                 }
+              }
+          });
+
+      } catch (e: any) {
+          console.error(e);
+          alert("Matchmaking error: " + e.message);
+          setIsMatchmaking(false);
+      }
+  };
+
+  const startSpinHost = async () => {
+      if (!joinedLobbyId) return;
+      const total = players.reduce((acc, p) => acc + p.totalValue, 0);
+      const roll = Math.random() * total;
+      
+      let cumulative = 0;
+      let winningPlayer = players[0];
+      if (players.length > 0) {
+        for (const p of players) {
+            cumulative += p.totalValue;
+            if (roll <= cumulative) {
+                winningPlayer = p;
+                break;
+            }
+        }
+      }
+
+      const items: PlayerInPool[] = [];
+      for(let i=0; i<45; i++) {
+          let cum = 0;
+          const r = Math.random() * total;
+          let added = false;
+          for (const p of players) {
+             cum += p.totalValue;
+             if (r <= cum) {
+                 items.push(p);
+                 added = true;
+                 break;
+             }
+          }
+          if (!added && players.length > 0) items.push(players[0]);
+      }
+      
+      items[40] = winningPlayer;
+      
+      try {
+          await updateDoc(doc(db, 'jackpot_lobbies', joinedLobbyId), {
+              status: 'spinning',
+              winnerId: winningPlayer.id,
+              rouletteItems: items
+          });
+      } catch (e) {
+          console.error(e);
+      }
   };
 
   const startSpin = () => {
@@ -209,7 +389,7 @@ export function JackpotPool() {
   const finishGame = async (winningPlayer: PlayerInPool) => {
       setGameState('result');
       
-      const isWinner = winningPlayer.id === 'me';
+      const isWinner = winningPlayer.id === (user?.uid || 'me');
       const allPotItems = players.flatMap(p => p.items);
       
       await executeJackpotLobby(selectedItems, allPotItems, isWinner);
@@ -256,20 +436,53 @@ export function JackpotPool() {
                          {selectedItems.length > 0 && (
                              <div className="text-center font-bold text-amber-400">{myTotalValue.toLocaleString()} CR</div>
                          )}
+
+                         <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
+                              <button
+                                  onClick={() => setOpponentMode('bot')}
+                                  className={`flex-1 py-1.5 rounded flex items-center justify-center gap-2 text-xs font-bold transition-all ${opponentMode === 'bot' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-white/10'}`}
+                              >
+                                  <Bot className="w-3.5 h-3.5" /> Bot Lobby
+                              </button>
+                              <button
+                                  onClick={() => setOpponentMode('player')}
+                                  className={`flex-1 py-1.5 rounded flex items-center justify-center gap-2 text-xs font-bold transition-all ${opponentMode === 'player' ? 'bg-[#10b981] text-white' : 'text-gray-400 hover:bg-white/10'}`}
+                              >
+                                  <UserIcon className="w-3.5 h-3.5" /> Multiplayer
+                              </button>
+                         </div>
+
                          <button 
                              onClick={handleJoin}
-                             disabled={selectedItems.length === 0}
+                             disabled={selectedItems.length === 0 || isMatchmaking}
                              className="w-full py-3 bg-[#10b981] hover:bg-[#10b981]/80 text-white font-black uppercase tracking-widest rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                          >
-                             Join Pool
+                             {isMatchmaking ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin" /> Matchmaking
+                                </div>
+                             ) : 'Join Pool'}
                          </button>
                      </div>
                  )}
 
                  {gameState === 'countdown' && (
-                     <div className="text-center py-4 border-2 border-[#10b981]/50 rounded-xl bg-[#10b981]/10">
-                        <div className="text-sm text-[#10b981] font-bold uppercase mb-1">Rolling In</div>
-                        <div className="text-5xl font-black text-white">{timeLeft}s</div>
+                                    <div className="text-center py-4 border-2 border-[#10b981]/50 rounded-xl bg-[#10b981]/10 flex flex-col items-center">
+                        <div className="text-sm text-[#10b981] font-bold uppercase mb-1">
+                           {opponentMode === 'player' && players.length < 2 ? 'Waiting for players...' : 'Rolling In'}
+                        </div>
+                        {players.length >= 2 || opponentMode === 'bot' ? (
+                           <div className="text-5xl font-black text-white">{timeLeft}s</div>
+                        ) : (
+                           <div className="flex justify-center mt-2 mb-2">
+                              <Loader2 className="w-8 h-8 text-[#10b981] animate-spin" />
+                           </div>
+                        )}
+                        {opponentMode === 'player' && players.length < 2 && (
+                            <button onClick={resetGame} className="mt-4 px-4 py-2 bg-red-500/20 text-red-500 rounded-lg text-xs font-bold hover:bg-red-500/30 transition-colors">
+                                Cancel Matchmaking
+                            </button>
+                        )}
                      </div>
                  )}
 
@@ -364,7 +577,7 @@ export function JackpotPool() {
                              animate={{ opacity: 1, scale: 1, y: 0 }}
                              className="mt-8 flex flex-col items-center bg-black/50 w-full p-6 rounded-2xl border border-white/10"
                           >
-                              <div className="text-4xl font-black uppercase mb-2 drop-shadow-lg" style={{ color: winner.color }}>
+                                <div className="text-4xl font-black uppercase mb-2 drop-shadow-lg" style={{ color: winner.color }}>
                                   {winner.name} WINS!
                               </div>
                               <div className="text-amber-400 font-bold mb-6 text-xl">
