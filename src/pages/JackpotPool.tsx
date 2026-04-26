@@ -31,8 +31,14 @@ export function JackpotPool() {
 
   const selectedItems = inventory.filter(i => selectedItemIds.includes(i.id!));
   const myTotalValue = selectedItems.reduce((acc, i) => acc + i.value, 0);
+  
+  const baseValueRef = useRef<number>(500);
 
   const totalPoolValue = players.reduce((acc, p) => acc + p.totalValue, 0);
+
+  useEffect(() => {
+      baseValueRef.current = myTotalValue || 500;
+  }, [myTotalValue]);
 
   const resetGame = () => {
       setGameState('setup');
@@ -73,6 +79,8 @@ export function JackpotPool() {
   const joinBot = async () => {
       const numItems = Math.floor(Math.random() * 4) + 1;
       const newItems: Item[] = [];
+      const currentTargetBet = baseValueRef.current;
+      
       for(let i=0; i<numItems; i++) {
           try {
              // Let bot grab roughly appropriate tier items relative to the pot
@@ -80,15 +88,27 @@ export function JackpotPool() {
              const r = Math.random();
              let val = 100;
              let rarity = 'Restricted';
-             if (r < 0.05) { val = 5000 + Math.random()*2000; rarity='Covert'; }
-             else if (r < 0.2) { val = 500 + Math.random()*500; rarity='Classified'; }
-             else { val = 50 + Math.random()*150; rarity='Restricted'; }
+             
+             // Target average total bet is ~currentTargetBet.
+             // We partition it across `numItems`.
+             const itemTargetVal = currentTargetBet / numItems;
+             
+             // Scale their values somewhat randomly around the target
+             const scale = 0.5 + Math.random(); // 0.5x to 1.5x of target
+             val = itemTargetVal * scale;
+             
+             // Assign rarity bounds loosely based on pure value 
+             if (val > 10000) { rarity = 'Exceedingly Rare'; }
+             else if (val > 2500) { rarity = 'Covert'; }
+             else if (val > 500) { rarity = 'Classified'; }
+             else if (val > 100) { rarity = 'Restricted'; }
+             else { rarity = 'Mil-Spec'; }
 
              newItems.push({
                  id: crypto.randomUUID(),
                  title: wikiData.title,
                  image: wikiData.image,
-                 value: Math.floor(val),
+                 value: Math.floor(val) < 1 ? 1 : Math.floor(val),
                  rarity,
                  wear: 'Factory New',
                  durability: 100,
@@ -100,7 +120,7 @@ export function JackpotPool() {
                  id: crypto.randomUUID(),
                  title: 'Bot Loot',
                  image: 'https://upload.wikimedia.org/wikipedia/commons/e/e0/Placeholder.png',
-                 value: 250,
+                 value: Math.max(250, Math.floor((currentTargetBet / numItems) * (0.8 + Math.random()*0.4))),
                  rarity: 'Restricted',
                  wear: 'Factory New',
                  durability: 100,

@@ -4,11 +4,12 @@ import { useGameStore } from '../store/gameStore';
 import { Item } from '../types';
 import { fetchRandomWikiArticle, RARITIES } from '../lib/gameLogic';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowUpRight, ShieldAlert, Sparkles, RefreshCcw, FileSignature, Swords, ChevronLeft, Gamepad2, Ticket, Target } from 'lucide-react';
+import { ArrowUpRight, ShieldAlert, Sparkles, RefreshCcw, FileSignature, Swords, ChevronLeft, Gamepad2, Ticket, Target, TrendingUp } from 'lucide-react';
 import { Battles } from './Battles';
 import { ScratchTickets } from './ScratchTickets';
 import { JackpotPool } from './JackpotPool';
 import { BombDefuse } from './BombDefuse';
+import { MoneyMultiplier } from './MoneyMultiplier';
 
 export function Minigames() {
   const location = useLocation();
@@ -46,6 +47,8 @@ export function Minigames() {
               return <div className="mt-6 flex-1 flex flex-col"><JackpotPool /></div>;
           case 'bombdefuse':
               return <div className="mt-6 flex-1 flex flex-col"><BombDefuse /></div>;
+          case 'moneymultiplier':
+              return <div className="mt-6 flex-1 flex flex-col"><MoneyMultiplier /></div>;
           default:
               return (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -137,7 +140,7 @@ export function Minigames() {
                       {/* Bomb Defuse */}
                       <button 
                         onClick={() => setActiveGame('bombdefuse')}
-                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-red-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-red-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 lg:col-span-1"
                       >
                           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex flex-col items-center justify-center shrink-0 border border-red-500/20">
@@ -147,6 +150,23 @@ export function Minigames() {
                               <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Bomb Defuse</h3>
                               <p className="text-gray-400 text-sm leading-relaxed">
                                   High stakes memory game. Defuse 20 bombs by memorizing sequences and cutting wires for a huge payout.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Money Multiplier */}
+                      <button 
+                        onClick={() => setActiveGame('moneymultiplier')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-blue-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-blue-500/20 flex flex-col items-center justify-center shrink-0 border border-blue-500/20">
+                              <TrendingUp className="w-7 h-7 text-blue-500" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Money Multiplier</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  Endless hopper! Hop forward to dodge traffic and boost your multiplier. Cash out before you crash.
                               </p>
                           </div>
                       </button>

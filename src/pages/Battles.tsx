@@ -53,11 +53,7 @@ export function Battles() {
         // Multiplayer Matchmaking
         try {
             const battlesCol = collection(db, 'battles');
-            const q = query(battlesCol, 
-                where('status', '==', 'waiting'), 
-                where('caseId', '==', selectedCase.id), 
-                where('amount', '==', amount)
-            );
+            const q = query(battlesCol, where('status', '==', 'waiting'));
             
             const snaps = await getDocs(q);
             let joinedId: string | null = null;
@@ -65,7 +61,8 @@ export function Battles() {
 
             // Try to join an existing one
             for (const docSnap of snaps.docs) {
-                if (docSnap.data().player1 !== user.uid) { // don't join your own lobby
+                const data = docSnap.data();
+                if (data.caseId === selectedCase.id && data.amount === amount && data.player1 !== user.uid) { // matching criteria
                     try {
                         await runTransaction(db, async (t) => {
                             const fresh = await t.get(docSnap.ref);
@@ -165,9 +162,9 @@ export function Battles() {
                 }
             });
 
-        } catch (e) {
-            console.error(e);
-            alert("Matchmaking error");
+        } catch (e: any) {
+            console.error("Firebase Matchmaking Error:", e, e.code, e.message);
+            alert("Matchmaking error: " + (e.message || "Unknown"));
             setBattleState('setup');
         }
     };
