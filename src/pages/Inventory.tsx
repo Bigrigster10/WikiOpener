@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { Coins, PackageOpen } from 'lucide-react';
+import { Coins, PackageOpen, Search, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { playSound } from '../lib/sounds';
+import { ShinyEffect } from '../components/ShinyEffect';
 
 export function Inventory() {
   const { inventory, sellItem, preferences } = useGameStore();
   const [sellingId, setSellingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [rarityFilter, setRarityFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'price-desc' | 'price-asc' | 'newest'>('price-desc');
 
   const handleSell = async (itemId: string, value: number) => {
     setSellingId(itemId);
@@ -24,6 +28,30 @@ export function Inventory() {
     'Exceedingly Rare': 'text-yellow-400 border-yellow-400/40 shadow-yellow-400/20 ring-1 ring-yellow-400/20',
   };
 
+  const filteredInventory = useMemo(() => {
+    let items = [...inventory];
+
+    // Search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      items = items.filter(i => i.title.toLowerCase().includes(q));
+    }
+
+    // Rarity
+    if (rarityFilter !== 'all') {
+      items = items.filter(i => i.rarity === rarityFilter);
+    }
+
+    // Sort
+    items.sort((a, b) => {
+      if (sortOrder === 'price-desc') return b.value - a.value;
+      if (sortOrder === 'price-asc') return a.value - b.value;
+      return 0; // Default uses the order in state (newest first usually)
+    });
+
+    return items;
+  }, [inventory, search, rarityFilter, sortOrder]);
+
   if (inventory.length === 0) {
     return (
       <div className="flex-1 glass flex flex-col items-center justify-center text-center space-y-6 p-12 max-w-2xl mx-auto my-12 w-full">
@@ -38,53 +66,101 @@ export function Inventory() {
 
   return (
     <div className="space-y-6 pb-12 w-full max-w-7xl mx-auto overflow-y-auto pr-2">
-      <div className="flex items-center justify-between glass p-4 px-6 sticky top-0 z-20">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight uppercase text-white">Inventory <span className="text-accent">Collection</span></h2>
+      <div className="flex flex-col gap-4 py-4 px-6 glass sticky top-0 z-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight uppercase text-white">Inventory <span className="text-accent">Collection</span></h2>
+          </div>
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-black/20 px-3 py-1.5 rounded-md border border-white/5">
+            {inventory.length} items
+          </div>
         </div>
-        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-black/20 px-3 py-1.5 rounded-md border border-white/5">
-          {inventory.length} items
+
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input 
+              type="text" 
+              placeholder="Search items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent transition-all placeholder:text-gray-600"
+            />
+          </div>
+          <div className="flex gap-3">
+            <select 
+              value={rarityFilter}
+              onChange={(e) => setRarityFilter(e.target.value)}
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer appearance-none min-w-[140px]"
+            >
+              <option value="all">All Rarities</option>
+              <option value="Consumer Grade">Consumer Grade</option>
+              <option value="Mil-Spec">Mil-Spec</option>
+              <option value="Restricted">Restricted</option>
+              <option value="Classified">Classified</option>
+              <option value="Covert">Covert</option>
+              <option value="Exceedingly Rare">Exceedingly Rare</option>
+            </select>
+
+            <select 
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as any)}
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer appearance-none min-w-[140px]"
+            >
+              <option value="price-desc">Price (High to Low)</option>
+              <option value="price-asc">Price (Low to High)</option>
+              <option value="newest">Newly Acquired</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {inventory.map((item) => {
+      {filteredInventory.length === 0 ? (
+        <div className="text-center py-24 glass">
+          <p className="text-gray-500 uppercase tracking-widest text-sm font-bold">No items match your filters</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {filteredInventory.map((item) => {
           const colorClass = rarityColorMap[item.rarity] || 'border-gray-700 shadow-transparent';
           const isSelling = sellingId === item.id;
           return (
-            <div key={item.id} className={`glass overflow-hidden flex flex-col relative group transition-transform hover:scale-105 hover:z-10 shadow-lg ${colorClass}`}>
-              <div className="h-32 bg-black/20 flex items-center justify-center p-3 relative">
-                <img src={item.image} alt={item.title} loading="lazy" decoding="async" className="max-h-full object-contain drop-shadow-lg z-10" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c]/80 to-transparent mix-blend-overlay"></div>
-              </div>
-              <div className="p-3 flex flex-col flex-1 bg-white/5 border-t border-white/5">
-                <div className="flex-1">
-                  <div className={`text-[10px] font-black uppercase tracking-wider opacity-90 truncate ${rarityColorMap[item.rarity]?.split(' ')[0]}`}>{item.rarity}</div>
-                  <h4 className="font-bold text-sm leading-tight text-white truncate mt-1" title={item.title}>{item.title}</h4>
-                  <div className="text-[10px] text-gray-400 mt-1 truncate font-mono bg-black/20 inline-block px-1.5 py-0.5 rounded border border-white/5">{item.wear}</div>
+            <ShinyEffect type={item.shinyType} key={item.id}>
+              <div className={`glass overflow-hidden flex flex-col relative group transition-transform hover:scale-105 hover:z-10 shadow-lg ${colorClass} h-full`}>
+                <div className="h-32 bg-black/20 flex items-center justify-center p-3 relative">
+                  <img src={item.image} alt={item.title} loading="lazy" decoding="async" className="max-h-full object-contain drop-shadow-lg z-10" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c]/80 to-transparent mix-blend-overlay"></div>
                 </div>
-                
-                <div className="mt-4 flex items-center justify-between bg-black/30 p-2 rounded-lg border border-white/5">
-                  <div className="flex items-center space-x-1 text-emerald-400 text-sm font-bold font-mono">
-                    {preferences.currency === 'CR' ? (
-                      <span>{item.value.toLocaleString()} CR</span>
-                    ) : (
-                      <span>${item.value.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                    )}
+                <div className="p-3 flex flex-col flex-1 bg-white/5 border-t border-white/5">
+                  <div className="flex-1">
+                    <div className={`text-[10px] font-black uppercase tracking-wider opacity-90 truncate ${rarityColorMap[item.rarity]?.split(' ')[0]}`}>{item.rarity}</div>
+                    <h4 className="font-bold text-sm leading-tight text-white truncate mt-1" title={item.title}>{item.title}</h4>
+                    <div className="text-[10px] text-gray-400 mt-1 truncate font-mono bg-black/20 inline-block px-1.5 py-0.5 rounded border border-white/5">{item.wear}</div>
                   </div>
-                  <button 
-                    disabled={isSelling}
-                    onClick={() => item.id && handleSell(item.id, item.value)}
-                    className="text-[10px] uppercase font-bold px-3 py-1.5 bg-red-500/20 hover:bg-red-500 hover:text-white text-red-300 rounded border border-red-500/30 transition-colors disabled:opacity-50 tracking-widest"
-                  >
-                    {isSelling ? '...' : 'Sell'}
-                  </button>
+                  
+                  <div className="mt-4 flex items-center justify-between bg-black/30 p-2 rounded-lg border border-white/5">
+                    <div className="flex items-center space-x-1 text-emerald-400 text-sm font-bold font-mono">
+                      {preferences.currency === 'CR' ? (
+                        <span>{item.value.toLocaleString()} CR</span>
+                      ) : (
+                        <span>${item.value.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                      )}
+                    </div>
+                    <button 
+                      disabled={isSelling}
+                      onClick={() => item.id && handleSell(item.id, item.value)}
+                      className="text-[10px] uppercase font-bold px-3 py-1.5 bg-red-500/20 hover:bg-red-500 hover:text-white text-red-300 rounded border border-red-500/30 transition-colors disabled:opacity-50 tracking-widest"
+                    >
+                      {isSelling ? '...' : 'Sell'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </ShinyEffect>
           );
         })}
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

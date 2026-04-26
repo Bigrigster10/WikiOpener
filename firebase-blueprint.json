@@ -31,6 +31,17 @@
         "acquiredAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "rarity", "wear", "value", "acquiredAt"]
+    },
+    "GlobalStats": {
+      "title": "Global Stats",
+      "description": "Global statistics like the progressive jackpot.",
+      "type": "object",
+      "properties": {
+        "jackpot": { "type": "number", "description": "The current progressive jackpot balance." },
+        "lastWinnerName": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jackpot", "updatedAt"]
     }
   },
   "firestore": {
@@ -41,6 +52,10 @@
     "/users/{userId}/inventory/{itemId}": {
       "schema": { "$ref": "#/entities/Item" },
       "description": "Stores items currently owned by the user."
+    },
+    "/stats/global": {
+      "schema": { "$ref": "#/entities/GlobalStats" },
+      "description": "Stores global application state like the jackpot."
     }
   }
 }

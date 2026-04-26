@@ -45,11 +45,14 @@ export const THEMES = [
   { id: 'polka-pop', name: 'Polka Pop', bg: '#fef08a', accent: '#e11d48', darkText: true },
   { id: 'ruled-notebook', name: 'Notebook', bg: '#f8fafc', accent: '#ef4444', darkText: true },
   { id: 'honeycomb-hive', name: 'Honeycomb', bg: '#f59e0b', accent: '#451a03', darkText: true },
-  { id: 'tv-static', name: 'TV Static', bg: '#333333', accent: '#ffffff' }
+  { id: 'tv-static', name: 'TV Static', bg: '#333333', accent: '#ffffff' },
+  { id: 'gold-supporter', name: 'Royal Gold', bg: '#1a1400', accent: '#fbbf24', isExclusive: true },
+  { id: 'platinum-supporter', name: 'Platinum', bg: '#111827', accent: '#e2e8f0', isExclusive: true },
+  { id: 'ruby-supporter', name: 'Ruby Core', bg: '#1a0000', accent: '#ff0000', isExclusive: true }
 ];
 
 export function Settings() {
-  const { theme, setTheme, user, profile } = useGameStore();
+  const { theme, setTheme, user, profile, devForcedRarity, setDevForcedRarity, devForcedShiny, setDevForcedShiny } = useGameStore();
   const [devCode, setDevCode] = useState('');
   const [devUnlocked, setDevUnlocked] = useState(false);
 
@@ -146,12 +149,21 @@ export function Settings() {
             <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest pl-1 block">All Themes</label>
             <select 
               value={theme}
-              onChange={(e) => setTheme(e.target.value)}
+              onChange={(e) => {
+                const selected = THEMES.find(t => t.id === e.target.value);
+                if (selected && (selected as any).isExclusive && !profile?.adsRemoved) {
+                  alert("This theme is exclusive to Supporters! Thank you for considering a donation.");
+                  return;
+                }
+                setTheme(e.target.value);
+              }}
               className="w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden p-3.5 text-sm text-gray-200 focus:outline-none focus:border-accent appearance-none cursor-pointer"
               style={{ backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em 1.2em`, paddingRight: `2.5rem` }}
             >
               {THEMES.map(t => (
-                <option key={t.id} value={t.id} className="bg-gray-900 text-white">{t.name}</option>
+                <option key={t.id} value={t.id} className="bg-gray-900 text-white">
+                  {(t as any).isExclusive && !profile?.adsRemoved ? `🔒 ${t.name}` : t.name}
+                </option>
               ))}
             </select>
           </div>
@@ -229,6 +241,61 @@ export function Settings() {
           </div>
         </section>
 
+        {profile?.adsRemoved && (
+          <section className="glass p-6 sm:p-8 flex flex-col gap-6 border-2 border-amber-500/30 overflow-hidden relative">
+            <div className="absolute -right-12 -top-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl"></div>
+            <div className="flex items-center gap-3 border-b border-amber-500/20 pb-4">
+              <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-black">
+                <span className="text-xl font-bold">👑</span>
+              </div>
+              <h3 className="text-xl font-bold uppercase tracking-widest text-amber-500">Supporter Hub</h3>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <h4 className="text-white font-bold flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-amber-500" /> Exclusive Themes
+                </h4>
+                <p className="text-gray-400 text-xs">
+                  Thank you for your donation! You've unlocked exclusive high-fidelity themes.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {THEMES.filter(t => (t as any).isExclusive).map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTheme(t.id)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                        theme === t.id ? 'border-amber-500 bg-amber-500/10 text-amber-500' : 'border-white/10 text-gray-400 hover:border-white/30'
+                      }`}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-white font-bold flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-500" /> Donator Status
+                </h4>
+                <div className="bg-amber-500/5 p-4 rounded-xl border border-amber-500/10">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-500 uppercase font-black">Ads Removed</span>
+                    <span className="text-xs text-emerald-400 font-bold">PERMANENT</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500 uppercase font-black">Badge</span>
+                    <span className="text-xs text-amber-500 font-bold italic">Global Supporter</span>
+                  </div>
+                </div>
+                <div className="text-[10px] text-gray-500">
+                  Your kindness keeps the servers running and independent development alive. You are awesome!
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Developer Sandbox Section */}
         <section className="glass p-6 sm:p-8 flex flex-col gap-6">
           <div className="flex items-center gap-3 border-b border-white/10 pb-4">
@@ -276,6 +343,45 @@ export function Settings() {
                 >
                   Reset Balance
                 </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-red-500/20">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-red-400 font-black uppercase tracking-widest pl-1">Force Next Rarity</label>
+                  <select 
+                    value={devForcedRarity || ''}
+                    onChange={(e) => setDevForcedRarity(e.target.value || null)}
+                    className="w-full bg-black/40 border border-red-500/30 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Default Weights</option>
+                    <option value="consumer">Consumer Grade</option>
+                    <option value="mil-spec">Mil-Spec</option>
+                    <option value="restricted">Restricted</option>
+                    <option value="classified">Classified</option>
+                    <option value="covert">Covert</option>
+                    <option value="gold">Exceedingly Rare</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] text-red-400 font-black uppercase tracking-widest pl-1">Force Next Shiny</label>
+                  <select 
+                    value={devForcedShiny || ''}
+                    onChange={(e) => setDevForcedShiny(e.target.value || null)}
+                    className="w-full bg-black/40 border border-red-500/30 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Default Weights</option>
+                    <option value="None">Force Normal</option>
+                    <option value="Shiny">Shiny</option>
+                    <option value="Glimmering">Glimmering</option>
+                    <option value="Radiant">Radiant</option>
+                    <option value="Rainbow">Rainbow</option>
+                    <option value="Prismatic">Prismatic</option>
+                    <option value="Celestial">Celestial</option>
+                    <option value="Dark Matter">Dark Matter</option>
+                    <option value="Dev">Dev (Coin Flip)</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}

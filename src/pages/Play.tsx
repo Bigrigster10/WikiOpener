@@ -1,14 +1,19 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useGameStore, Item } from '../store/gameStore';
-import { CASES, drawRarity, generateDurability, getWearInfo, calculateValue, fetchRandomWikiArticle, CaseType, RARITIES } from '../lib/gameLogic';
+import { useNavigate } from 'react-router-dom';
+import { useGameStore } from '../store/gameStore';
+import { Item } from '../types';
+import { CASES, drawRarity, generateDurability, getWearInfo, calculateValue, fetchRandomWikiArticle, CaseType, RARITIES, determineShinyType, SECRET_BILLION_CASE } from '../lib/gameLogic';
 import { motion, AnimatePresence } from 'motion/react';
-import { Coins, Loader2, Search, Filter, Info, X, ChevronLeft, Gem, Crosshair, Package } from 'lucide-react';
+import { Coins, Loader2, Search, Filter, Info, X, ChevronLeft, Gem, Crosshair, Package, Gamepad2, Sparkles, Key } from 'lucide-react';
 
 import { playSound } from '../lib/sounds';
 import { CaseRoulette } from '../components/CaseRoulette';
+import { ShinyEffect } from '../components/ShinyEffect';
+import { ShinyImpact } from '../components/ShinyImpact';
 
 export function Play() {
-  const { profile, openCase, preferences, sellItem, recordAdWatch } = useGameStore();
+  const navigate = useNavigate();
+  const { profile, openCase, preferences, sellItem, recordAdWatch, devForcedRarity, devForcedShiny, showSecretCase } = useGameStore();
   const [selectedMode, setSelectedMode] = useState<'original' | 'csgo' | 'premium' | null>(null);
   
   const [opening, setOpening] = useState(false);
@@ -24,6 +29,15 @@ export function Play() {
   const [adTimeLeft, setAdTimeLeft] = useState<number>(0);
   const [adCooldownRemaining, setAdCooldownRemaining] = useState<number>(0);
   const [selectedFocuses, setSelectedFocuses] = useState<Record<string, string>>({});
+
+  // Dev Item Reveal States
+  const [showDevReveal, setShowDevReveal] = useState(false);
+  const [devRevealStep, setDevRevealStep] = useState<'white' | 'popup' | 'flip' | 'result'>('white');
+  const [isFlipping, setIsFlipping] = useState(false);
+  
+  // Shiny Impact States
+  const [activeShinyImpact, setActiveShinyImpact] = useState<string | null>(null);
+  const [screenShake, setScreenShake] = useState(false);
 
   const handleFocusChange = (caseId: string, focusQuery: string) => {
     setSelectedFocuses(prev => ({ ...prev, [caseId]: focusQuery }));
@@ -65,6 +79,13 @@ export function Play() {
 
   const handleWatchAd = (caseData: CaseType) => {
     setAdModal(caseData);
+
+    if (profile?.adsRemoved) {
+      setAdPlaying(false);
+      setAdTimeLeft(0);
+      return;
+    }
+
     setAdPlaying(true);
     setAdTimeLeft(30);
     
@@ -97,14 +118,22 @@ export function Play() {
   };
 
   const categoryFilteredCases = useMemo(() => {
+    let base = [];
     if (selectedMode === 'csgo') {
-      return CASES.filter(c => c.category === 'CS:GO');
+      base = CASES.filter(c => c.category === 'CS:GO');
+    } else if (selectedMode === 'premium') {
+      base = CASES.filter(c => c.isPremium);
+    } else {
+      // Original mode: exclude CSGO, Premium, and Secret (unless unlocked)
+      base = CASES.filter(c => {
+        if (c.category === 'CS:GO' || c.isPremium) return false;
+        if (c.category === 'Secret') return showSecretCase;
+        return true;
+      });
     }
-    if (selectedMode === 'premium') {
-      return CASES.filter(c => c.isPremium);
-    }
-    return CASES.filter(c => c.category !== 'CS:GO' && !c.isPremium);
-  }, [selectedMode]);
+
+    return base;
+  }, [selectedMode, showSecretCase]);
 
   const filteredCases = useMemo(() => {
     let result = [...categoryFilteredCases];
@@ -118,7 +147,14 @@ export function Play() {
     }
     
     // Apply Sort Order
-    const getPrice = (c: CaseType) => c.isPremium ? (c.realMoneyPrice || 0) : c.cost;
+    const getActiveCost = (c: CaseType) => {
+        let base = c.cost;
+        if (c.focuses && selectedFocuses[c.id] && selectedFocuses[c.id] !== 'no-focus') {
+           base = base === 0 ? 250 : Math.floor(base * 1.5);
+        }
+        return base;
+    };
+    const getPrice = (c: CaseType) => c.isPremium ? (c.realMoneyPrice || 0) : getActiveCost(c);
 
     if (sortOrder === 'name-asc') {
       result.sort((a, b) => a.name.localeCompare(b.name));
@@ -137,23 +173,49 @@ export function Play() {
     return result;
   }, [search, sortOrder, categoryFilteredCases]);
 
-  const handleOpenComplete = async (caseId: string, item: Item) => {
+  const handleOpenComplete = async (caseId: string, item: Item, costOverride?: number) => {
     try {
-      await openCase(caseId, item);
+      const result = await openCase(caseId, item, costOverride);
       
-      // awesome sounds
-      if (item.rarity === RARITIES.EXCEEDINGLY_RARE.name) {
-          playSound('legendary');
-      } else if (item.rarity === RARITIES.COVERT.name || item.rarity === RARITIES.CLASSIFIED.name) {
-          playSound('epic');
-      } else {
-          playSound('success');
-      }
-
       setSpinReward(null);
-      setReward(item);
       setOpening(false);
       setActiveCaseData(null);
+
+      if (result?.wonJackpot) {
+         playSound('legendary');
+         setTimeout(() => {
+           alert(`🎰 UNBELIEVABLE! You just hit the Progressive Jackpot for ${result.winAmount.toLocaleString()} credits!`);
+         }, 1000);
+      }
+
+      if (item.shinyType === 'Dev') {
+        setShowDevReveal(true);
+        setDevRevealStep('white');
+        setReward(item); 
+        playSound('legendary');
+        
+        setTimeout(() => {
+          setDevRevealStep('popup');
+        }, 1500);
+      } else {
+        setReward(item);
+        
+        // Shiny Impact
+        if (item.shinyType && item.shinyType !== 'None') {
+          setActiveShinyImpact(item.shinyType);
+          setScreenShake(true);
+          setTimeout(() => setScreenShake(false), 500);
+        }
+
+        // awesome sounds
+        if (item.rarity === RARITIES.EXCEEDINGLY_RARE.name) {
+            playSound('legendary');
+        } else if (item.rarity === RARITIES.COVERT.name || item.rarity === RARITIES.CLASSIFIED.name) {
+            playSound('epic');
+        } else {
+            playSound('success');
+        }
+      }
     } catch (error) {
       console.error("Failed to open case:", error);
       alert("Failed to claim item. Please try again.");
@@ -163,10 +225,21 @@ export function Play() {
     }
   };
 
+  const getActiveCostForCase = (c: CaseType) => {
+      let base = c.cost;
+      if (c.focuses && selectedFocuses[c.id] && selectedFocuses[c.id] !== 'no-focus') {
+         base = base === 0 ? 250 : Math.floor(base * 1.5);
+      }
+      return base;
+  };
+
   const handleOpen = async (caseId: string, free: boolean = false) => {
-    if (!profile) return;
+    if (!profile || opening) return;
     const caseData = CASES.find(c => c.id === caseId);
-    if (!caseData || (!free && !caseData.isPremium && profile.credits < caseData.cost)) return;
+    if (!caseData) return;
+    
+    const activeCost = getActiveCostForCase(caseData);
+    if (!free && !caseData.isPremium && profile.credits < activeCost) return;
 
     setOpening(true);
     setActiveCaseData(caseData);
@@ -174,10 +247,16 @@ export function Play() {
     playSound('open');
 
     try {
-      const rarity = drawRarity(caseId);
+      let rarity = drawRarity(caseId, profile.pityCounter || 0);
+      if (devForcedRarity) {
+        const forced = Object.values(RARITIES).find(r => r.id === devForcedRarity);
+        if (forced) rarity = forced;
+      }
+
+      const shinyType = determineShinyType(devForcedShiny || undefined);
       const durability = generateDurability();
       const wearInfo = getWearInfo(durability);
-      const value = calculateValue(rarity.id, wearInfo.multiplier, caseData);
+      const value = calculateValue(rarity.id, wearInfo.multiplier, caseData, shinyType);
       
       let title = "Unknown Item";
       let image = "https://steamcommunity-a.akamaihd.net/economy/image/class/730/error";
@@ -200,9 +279,13 @@ export function Play() {
             image = randomDrop.image;
          }
       } else {
-         const focusQuery = caseData.focuses && caseData.focuses.length > 0
-           ? (selectedFocuses[caseId] || caseData.focuses[0].searchQuery)
-           : caseData.category;
+         let focusQuery = caseData.category === 'Random' ? '' : caseData.category;
+         if (caseData.focuses && caseData.focuses.length > 0) {
+           const selected = selectedFocuses[caseId] ?? 'no-focus';
+           if (selected !== 'no-focus') {
+             focusQuery = selected;
+           }
+         }
          
          const wikiData = await fetchRandomWikiArticle(focusQuery);
          title = wikiData.title;
@@ -220,6 +303,7 @@ export function Play() {
         durability,
         value,
         caseType: caseData.name,
+        shinyType: shinyType as any,
         timestamp: Date.now()
       };
 
@@ -227,7 +311,7 @@ export function Play() {
         setSpinReward(newItem);
         // handoff to roulette
       } else {
-        await handleOpenComplete(caseId, newItem);
+        await handleOpenComplete(caseId, newItem, activeCost);
       }
     } catch (err) {
       console.error(err);
@@ -235,6 +319,21 @@ export function Play() {
       setOpening(false);
       setActiveCaseData(null);
     }
+  };
+
+  const handleStartFlip = () => {
+    setDevRevealStep('flip');
+    setIsFlipping(true);
+    
+    setTimeout(() => {
+      setIsFlipping(false);
+      setDevRevealStep('result');
+      if (reward && reward.value > 1) {
+        playSound('success');
+      } else {
+        playSound('womp');
+      }
+    }, 3000);
   };
 
   const rarityColorMap: Record<string, string> = {
@@ -246,68 +345,88 @@ export function Play() {
     'Exceedingly Rare': 'text-yellow-400 bg-yellow-400/5 text-shadow-[0_0_10px_rgba(250,204,21,0.5)]',
   };
 
-  const getModalVariants = (rarity: string) => {
-    switch (rarity) {
-      case 'Exceedingly Rare':
-        return {
-          initial: { scale: 0.1, opacity: 0, rotate: -45, y: -500 },
-          animate: { 
-            scale: 1, 
-            opacity: 1, 
-            rotate: 0, 
-            y: 0,
-            transition: { type: "spring", damping: 10, stiffness: 200, mass: 1.5 } 
-          }
-        };
-      case 'Covert':
-        return {
-          initial: { scale: 0.05, opacity: 0 },
-          animate: { 
-            scale: 1, 
-            opacity: 1, 
-            transition: { type: "spring", damping: 12, stiffness: 250 } 
-          }
-        };
-      case 'Classified':
-        return {
-          initial: { scale: 0.5, opacity: 0, y: 300 },
-          animate: { 
-            scale: 1, 
-            opacity: 1, 
-            y: 0, 
-            transition: { type: "spring", damping: 14, stiffness: 180 } 
-          }
-        };
-      case 'Restricted':
-        return {
-          initial: { x: -300, opacity: 0, skewX: -30 },
-          animate: { 
-            x: 0, 
-            opacity: 1, 
-            skewX: 0, 
-            transition: { type: "spring", damping: 15, stiffness: 150 } 
-          }
-        };
-      case 'Mil-Spec':
-        return {
-          initial: { scale: 0.2, opacity: 0 },
-          animate: { 
-            scale: 1, 
-            opacity: 1, 
-            transition: { type: "spring", damping: 18, stiffness: 220 } 
-          }
-        };
-      default:
-        return {
-          initial: { scale: 0.8, opacity: 0, y: 40 },
-          animate: { 
-            scale: 1, 
-            opacity: 1, 
-            y: 0, 
-            transition: { type: "spring", damping: 20, stiffness: 120 } 
-          }
-        };
+  const getModalVariants = (rarity: string, isShiny: boolean) => {
+    const base = (() => {
+      switch (rarity) {
+        case 'Exceedingly Rare':
+          return {
+            initial: { scale: 0.1, opacity: 0, rotate: -45, y: -500 },
+            animate: { 
+              scale: 1, 
+              opacity: 1, 
+              rotate: 0, 
+              y: 0,
+              transition: { type: "spring", damping: 10, stiffness: 200, mass: 1.5 } 
+            }
+          };
+        case 'Covert':
+          return {
+            initial: { scale: 0.05, opacity: 0 },
+            animate: { 
+              scale: 1, 
+              opacity: 1, 
+              transition: { type: "spring", damping: 12, stiffness: 250 } 
+            }
+          };
+        case 'Classified':
+          return {
+            initial: { scale: 0.5, opacity: 0, y: 300 },
+            animate: { 
+              scale: 1, 
+              opacity: 1, 
+              y: 0, 
+              transition: { type: "spring", damping: 14, stiffness: 180 } 
+            }
+          };
+        case 'Restricted':
+          return {
+            initial: { x: -300, opacity: 0, skewX: -30 },
+            animate: { 
+              x: 0, 
+              opacity: 1, 
+              skewX: 0, 
+              transition: { type: "spring", damping: 15, stiffness: 150 } 
+            }
+          };
+        case 'Mil-Spec':
+          return {
+            initial: { scale: 0.2, opacity: 0 },
+            animate: { 
+              scale: 1, 
+              opacity: 1, 
+              transition: { type: "spring", damping: 18, stiffness: 220 } 
+            }
+          };
+        default:
+          return {
+            initial: { scale: 0.8, opacity: 0, y: 40 },
+            animate: { 
+              scale: 1, 
+              opacity: 1, 
+              y: 0, 
+              transition: { type: "spring", damping: 20, stiffness: 120 } 
+            }
+          };
+      }
+    })();
+
+    if (isShiny) {
+      return {
+        initial: { ...base.initial, scale: 0, filter: 'blur(30px)' },
+        animate: { 
+          ...base.animate, 
+          scale: 1.1, 
+          filter: 'blur(0px)',
+          transition: { 
+            ...base.animate.transition, 
+            delay: 0.3,
+            // @ts-ignore
+            duration: base.animate.transition.duration ? base.animate.transition.duration * 1.5 : 0.8
+          } 
+        }
+      };
     }
+    return base;
   };
 
   if (!selectedMode) {
@@ -342,7 +461,7 @@ export function Play() {
                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.2)_0%,transparent_70%)]" />
             </div>
             <div className="p-6">
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-blue-400 transition-colors">CS:GO Patterns</h3>
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 group-hover:text-blue-400 transition-colors">CS:GO Cases</h3>
               <p className="text-gray-400 text-sm">Cases engineered closely to legendary eSports crates. Contains high-volatility rarity distributions.</p>
             </div>
           </button>
@@ -366,7 +485,20 @@ export function Play() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto pb-12 overflow-y-auto">
+    <motion.div 
+      animate={screenShake ? { 
+        x: activeShinyImpact === 'Dark Matter' || activeShinyImpact === 'Celestial' || activeShinyImpact === 'Dev'
+          ? [0, -40, 40, -40, 40, -20, 20, 0] 
+          : activeShinyImpact === 'Prismatic' || activeShinyImpact === 'Rainbow'
+          ? [0, -25, 25, -25, 25, 0]
+          : [0, -15, 15, -15, 15, 0],
+        y: activeShinyImpact === 'Dark Matter' || activeShinyImpact === 'Celestial' || activeShinyImpact === 'Dev'
+          ? [0, 20, -20, 20, -20, 10, -10, 0]
+          : [0, 10, -10, 10, -10, 0]
+      } : {}}
+      transition={{ duration: 0.5 }}
+      className="flex flex-col gap-6 w-full max-w-7xl mx-auto pb-12 overflow-y-auto"
+    >
       <div className="flex items-center gap-4 mt-2">
         <button 
           onClick={() => setSelectedMode(null)}
@@ -380,11 +512,17 @@ export function Play() {
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between mt-2">
         <div className="space-y-1 w-full md:w-auto text-center md:text-left">
           <h2 className="text-3xl font-black tracking-tighter uppercase text-white">
-            {selectedMode === 'csgo' ? 'CS:GO Patterns' : selectedMode === 'premium' ? 'Premium Caches' : 'Original Cases'}
+            {selectedMode === 'csgo' ? 'CS:GO Cases' : selectedMode === 'premium' ? 'Premium Caches' : 'Original Cases'}
           </h2>
           <p className="text-gray-400 text-sm">
             Spend your credits to open thematic cases.
           </p>
+          {(profile?.pityCounter || 0) > 50 && (
+             <div className="inline-flex items-center gap-1.5 mt-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-[0_0_10px_rgba(234,179,8,0.1)]">
+               <Sparkles className="w-3 h-3" />
+               Luck Protection Active (+{(((profile?.pityCounter || 0) - 50) * 0.5).toFixed(1)}% High Tier Rate)
+             </div>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto flex-1 md:max-w-2xl justify-end">
@@ -420,7 +558,8 @@ export function Play() {
       {/* Case Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {filteredCases.map((c) => {
-          const afford = profile ? profile.credits >= c.cost : false;
+          const activeCost = getActiveCostForCase(c);
+          const afford = profile ? profile.credits >= activeCost : false;
           return (
             <div key={c.id} className="glass overflow-hidden flex flex-col transition-transform hover:scale-[1.02] cursor-default shadow-lg group">
               <div className="h-40 relative w-full overflow-hidden flex items-center justify-center p-4 border-b border-white/5 bg-black/20">
@@ -462,9 +601,9 @@ export function Play() {
                       <span className="text-yellow-400">Premium Case</span>
                     ) : (
                       preferences.currency === 'CR' ? (
-                        <span>{c.cost === 0 ? 'FREE' : c.cost.toLocaleString() + ' CR'}</span>
+                        <span>{getActiveCostForCase(c) === 0 ? 'FREE' : getActiveCostForCase(c).toLocaleString() + ' CR'}</span>
                       ) : (
-                        <span>${c.cost === 0 ? '0.00' : c.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>${getActiveCostForCase(c) === 0 ? '0.00' : getActiveCostForCase(c).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       )
                     )}
                   </div>
@@ -477,9 +616,10 @@ export function Play() {
                     <select 
                       className="w-full bg-black/60 border border-white/10 rounded overflow-hidden p-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 appearance-none cursor-pointer"
                       style={{ backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right .2rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em 1.2em`, paddingRight: `1.5rem` }}
-                      value={selectedFocuses[c.id] || c.focuses[0].searchQuery}
+                      value={selectedFocuses[c.id] ?? 'no-focus'}
                       onChange={(e) => handleFocusChange(c.id, e.target.value)}
                     >
+                      <option value="no-focus" className="bg-gray-900 text-gray-400 italic">No Focus ({c.category} Pool)</option>
                       {c.focuses.map(f => (
                         <option key={f.id} value={f.searchQuery} className="bg-gray-900">{f.name}</option>
                       ))}
@@ -490,18 +630,18 @@ export function Play() {
                 {c.isPremium ? (
                   <div className="flex flex-col gap-2">
                     <button
-                      disabled={opening || adCooldownRemaining > 0}
+                      disabled={opening || (adCooldownRemaining > 0 && !profile?.adsRemoved)}
                       onClick={() => handleWatchAd(c)}
-                      className={`w-full py-2.5 rounded-lg flex-1 font-bold uppercase tracking-widest text-[10px] transition-all flex flex-col justify-center items-center shadow ${adCooldownRemaining > 0 ? 'bg-black/20 text-gray-500 cursor-not-allowed border border-white/5' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
-                      title={adCooldownRemaining > 0 ? "Next ad available in " + formatTime(adCooldownRemaining) : "Watch Ad"}
+                      className={`w-full py-2.5 rounded-lg flex-1 font-bold uppercase tracking-widest text-[10px] transition-all flex flex-col justify-center items-center shadow ${(adCooldownRemaining > 0 && !profile?.adsRemoved) ? 'bg-black/20 text-gray-500 cursor-not-allowed border border-white/5' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
+                      title={(adCooldownRemaining > 0 && !profile?.adsRemoved) ? "Next ad available in " + formatTime(adCooldownRemaining) : (profile?.adsRemoved ? "Open Instantly (Ads Removed)" : "Watch Ad")}
                     >
-                      {adCooldownRemaining > 0 ? (
+                      {(adCooldownRemaining > 0 && !profile?.adsRemoved) ? (
                          <>
                            <span className="text-[9px]">Cooldown</span>
                            <span>{formatTime(adCooldownRemaining)}</span>
                          </>
                       ) : (
-                        <span>Watch Ad</span>
+                        <span>{profile?.adsRemoved ? 'Free Open' : 'Watch Ad'}</span>
                       )}
                     </button>
                     <button
@@ -557,12 +697,37 @@ export function Play() {
                 </button>
               </div>
               <div className="space-y-3">
-                {oddsModal.odds.map((odd, idx) => (
-                  <div key={idx} className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
-                    <span className={`font-bold text-sm ${odd.rarity.color}`}>{odd.rarity.name}</span>
-                    <span className="text-white font-mono text-sm">{(odd.chance * 100).toFixed(2)}%</span>
-                  </div>
-                ))}
+                {(() => {
+                  let adjustedOdds = [...oddsModal.odds.map(o => ({...o}))];
+                  const pity = profile?.pityCounter || 0;
+                  if (pity > 50) {
+                      const pityBonus = (pity - 50) * 0.005; 
+                      const classifiedIdx = adjustedOdds.findIndex(o => o.rarity.name === RARITIES.CLASSIFIED.name);
+                      const covertIdx = adjustedOdds.findIndex(o => o.rarity.name === RARITIES.COVERT.name);
+                      const exceedinglyRareIdx = adjustedOdds.findIndex(o => o.rarity.name === RARITIES.EXCEEDINGLY_RARE.name);
+                      
+                      if (classifiedIdx !== -1) adjustedOdds[classifiedIdx].chance += pityBonus * 0.6;
+                      if (covertIdx !== -1) adjustedOdds[covertIdx].chance += pityBonus * 0.3;
+                      if (exceedinglyRareIdx !== -1) adjustedOdds[exceedinglyRareIdx].chance += pityBonus * 0.1;
+                      
+                      const totalChance = adjustedOdds.reduce((sum, o) => sum + o.chance, 0);
+                      adjustedOdds.forEach(o => o.chance /= totalChance);
+                  }
+                  
+                  return adjustedOdds.map((odd, idx) => {
+                    const originalOdd = oddsModal.odds[idx];
+                    const boosted = odd.chance > originalOdd.chance;
+                    return (
+                      <div key={idx} className={`flex justify-between items-center p-3 rounded-lg border ${boosted ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-black/20 border-white/5'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold text-sm ${odd.rarity.color}`}>{odd.rarity.name}</span>
+                          {boosted && <Sparkles className="w-3 h-3 text-yellow-500" />}
+                        </div>
+                        <span className={`font-mono text-sm ${boosted ? 'text-yellow-400 font-bold' : 'text-white'}`}>{(odd.chance * 100).toFixed(2)}%</span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
               <button 
                 onClick={() => setOddsModal(null)} 
@@ -580,13 +745,13 @@ export function Play() {
         <CaseRoulette 
           targetItem={spinReward} 
           activeCase={activeCaseData} 
-          onFinish={() => handleOpenComplete(activeCaseData.id, spinReward)} 
+          onFinish={() => handleOpenComplete(activeCaseData.id, spinReward, getActiveCostForCase(activeCaseData))} 
         />
       )}
 
       {/* Reveal Modal */}
       <AnimatePresence>
-        {reward && (
+        {reward && !showDevReveal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -645,7 +810,7 @@ export function Play() {
             )}
 
             <motion.div 
-              variants={getModalVariants(reward.rarity)}
+              variants={getModalVariants(reward.rarity, reward.shinyType !== 'None')}
               initial="initial"
               animate="animate"
               className={`glass max-w-lg w-full shadow-2xl flex flex-col overflow-hidden relative shrink-0 border-2 ${
@@ -664,22 +829,45 @@ export function Play() {
                 </div>
 
                 <div className="relative w-56 h-56 flex items-center justify-center my-4 group">
-                  <div className="absolute inset-0 bg-white/5 rounded-2xl -rotate-6 transition-transform group-hover:rotate-0 border border-white/10"></div>
-                  <div className="absolute inset-0 bg-black/20 rounded-2xl rotate-3 transition-transform group-hover:rotate-0 border border-white/5 backdrop-blur-sm"></div>
+                  <div className="absolute inset-0 z-0">
+                    <div className="absolute inset-0 bg-white/5 rounded-2xl -rotate-6 transition-transform group-hover:rotate-0 border border-white/10"></div>
+                    <div className="absolute inset-0 bg-black/20 rounded-2xl rotate-3 transition-transform group-hover:rotate-0 border border-white/5 backdrop-blur-sm"></div>
+                  </div>
                   
-                  <motion.img 
-                    initial={{ y: 50, scale: 0.5, rotate: -20 }}
-                    animate={{ y: [0, -10, 0], scale: 1, rotate: 0 }}
-                    transition={{ 
-                      y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 },
-                      scale: { type: "spring", stiffness: 300, damping: 12 },
-                      rotate: { type: "spring", stiffness: 300, damping: 12 }
-                    }}
-                    src={reward.image} 
-                    alt={reward.title} 
-                    className="max-h-full object-cover relative z-10 drop-shadow-2xl rounded-lg" 
-                    referrerPolicy="no-referrer"
-                  />
+                  <ShinyEffect key={reward.id + '-' + reward.shinyType} type={reward.shinyType} className="p-6 relative z-10">
+                    {reward.shinyType !== 'None' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 1 }}
+                        className="absolute -top-4 left-1/2 -translate-x-1/2 z-20"
+                      >
+                         <div className={`px-4 py-1 rounded-full text-xs font-black uppercase tracking-[0.3em] shadow-xl border-2 whitespace-nowrap
+                          ${reward.shinyType === 'Dev' ? 'bg-green-500 text-black border-green-300 animate-pulse' : 
+                            reward.shinyType === 'Dark Matter' ? 'bg-black text-white border-purple-900/50' :
+                            reward.shinyType === 'Celestial' ? 'bg-purple-600 text-white border-purple-400' :
+                            reward.shinyType === 'Prismatic' ? 'bg-pink-500 text-white border-pink-300' :
+                            reward.shinyType === 'Rainbow' ? 'bg-white text-black border-gray-200' :
+                            'bg-yellow-400 text-black border-yellow-200'
+                          }`}>
+                          {reward.shinyType} TIER
+                        </div>
+                      </motion.div>
+                    )}
+                    <motion.img 
+                      initial={{ y: 50, scale: 0.5, rotate: -20 }}
+                      animate={{ y: [0, -10, 0], scale: 1, rotate: 0 }}
+                      transition={{ 
+                        y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 },
+                        scale: { type: "spring", stiffness: 300, damping: 12 },
+                        rotate: { type: "spring", stiffness: 300, damping: 12 }
+                      }}
+                      src={reward.image} 
+                      alt={reward.title} 
+                      className="max-h-full object-cover drop-shadow-2xl rounded-lg" 
+                      referrerPolicy="no-referrer"
+                    />
+                  </ShinyEffect>
                 </div>
 
                 <h2 className="text-3xl font-black text-white leading-tight drop-shadow-md">{reward.title}</h2>
@@ -706,6 +894,22 @@ export function Play() {
                     )}
                   </div>
                 </div>
+
+                {reward.shinyType === 'Dev' && (
+                  <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl w-full">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                       <div className="w-8 h-8 rounded-full bg-yellow-400 border-2 border-yellow-600 flex items-center justify-center text-xs font-bold text-yellow-800 animate-bounce">
+                          {reward.value > 1 ? 'H' : 'T'}
+                       </div>
+                       <span className="text-xs font-black text-green-400 uppercase tracking-widest">
+                          Dev Coin Flip: {reward.value > 1 ? 'HEADS (JACKPOT!)' : 'TAILS (RIP)'}
+                       </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-tight">
+                      Dev items trigger a mandatory coin flip. Heads: $1,000,000,000. Tails: $0.01.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 bg-black/40 border-t border-white/5 flex flex-col gap-2">
@@ -715,6 +919,22 @@ export function Play() {
                 >
                   Keep Item
                 </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => navigate('/minigames', { state: { autoSelectItemId: reward.id, activeGame: 'upgrader' } })}
+                    className="py-3 bg-accent/20 hover:bg-accent/40 text-accent rounded-lg font-black transition-all border border-accent/30 hover:border-accent shadow-[0_0_10px_rgba(var(--color-accent),0.1)] uppercase tracking-widest text-[10px] flex justify-center items-center gap-1"
+                  >
+                    <Gamepad2 className="w-3 h-3" />
+                    Upgrader
+                  </button>
+                  <button
+                    onClick={() => navigate('/minigames', { state: { autoSelectItemId: reward.id, activeGame: 'contract' } })}
+                    className="py-3 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-black transition-all border border-blue-500/30 hover:border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)] uppercase tracking-widest text-[10px] flex justify-center items-center gap-1"
+                  >
+                    <Gamepad2 className="w-3 h-3" />
+                    Contract
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => {
@@ -737,6 +957,16 @@ export function Play() {
       </AnimatePresence>
 
       {/* Ad Modal */}
+      {/* Secret Reveal Cutscene */}
+      <AnimatePresence>
+        {activeShinyImpact && (
+          <ShinyImpact 
+            type={activeShinyImpact} 
+            onComplete={() => setActiveShinyImpact(null)} 
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {adPlaying && adModal && (
           <motion.div
@@ -775,7 +1005,11 @@ export function Play() {
           >
             <div className="flex flex-col items-center justify-center max-w-sm text-center bg-gray-900 p-8 rounded-xl border border-white/10 shadow-2xl">
               <h2 className="text-3xl font-black mb-4 uppercase tracking-tighter text-emerald-400">Reward Unlocked!</h2>
-              <p className="text-gray-300 mb-6">You've successfully watched the ad. You can now open {adModal.name} for free!</p>
+              {profile?.adsRemoved ? (
+                <p className="text-gray-300 mb-6">Because you purchased Ads Removed, you can instantly open {adModal.name} for free!</p>
+              ) : (
+                <p className="text-gray-300 mb-6">You've successfully watched the ad. You can now open {adModal.name} for free!</p>
+              )}
               <button
                 onClick={handleClaimAdReward}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded text-white font-bold uppercase tracking-widest text-sm"
@@ -787,6 +1021,123 @@ export function Play() {
         )}
       </AnimatePresence>
 
-    </div>
+      <AnimatePresence>
+        {showDevReveal && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-0 bg-black"
+          >
+            {/* Step 1: Blinding White Screen */}
+            {devRevealStep === 'white' && (
+              <motion.div 
+                initial={{ opacity: 1 }}
+                animate={{ opacity: [1, 1, 1, 0] }}
+                transition={{ duration: 1.5, times: [0, 0.2, 0.8, 1] }}
+                className="fixed inset-0 bg-white z-[210]"
+              />
+            )}
+
+            {/* Background for Flip/Popup */}
+            {devRevealStep !== 'white' && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[205]"
+              />
+            )}
+
+            {/* Step 2: Popup */}
+            {devRevealStep === 'popup' && (
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="relative z-[220] flex flex-col items-center text-center p-8 glass max-w-sm rounded-3xl border-2 border-green-500 shadow-[0_0_50px_rgba(34,197,94,0.3)]"
+              >
+                <div className="w-24 h-24 mb-6 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center rotate-3 shadow-lg shadow-green-500/20">
+                  <Key className="w-12 h-12 text-black" />
+                </div>
+                <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 italic">Founder’s Key found</h2>
+                <p className="text-green-400 font-bold mb-8">You have found the Founder’s Key. Flip to reveal your fortune.</p>
+                <button 
+                  onClick={handleStartFlip}
+                  className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black uppercase tracking-widest text-lg rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95"
+                >
+                  Flip Coin
+                </button>
+              </motion.div>
+            )}
+
+            {/* Step 3: Coin Flip Animation */}
+            {devRevealStep === 'flip' && (
+              <div className="relative z-[220] flex flex-col items-center">
+                <motion.div 
+                  initial={{ rotateY: 0 }}
+                  animate={{ 
+                    rotateY: 1800,
+                    y: [-100, -250, 0],
+                    scale: [1, 1.5, 1]
+                  }}
+                  transition={{ duration: 3, ease: "easeInOut" }}
+                  className="w-48 h-48 rounded-full bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 border-4 border-yellow-700 shadow-2xl flex items-center justify-center text-6xl font-black text-yellow-900"
+                >
+                   ?
+                </motion.div>
+                <p className="mt-12 text-xl font-mono text-white animate-pulse">FLIPPING...</p>
+              </div>
+            )}
+
+            {/* Step 4: Result */}
+            {devRevealStep === 'result' && reward && (
+              <motion.div 
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="relative z-[220] flex flex-col items-center text-center p-8"
+              >
+                {reward.value > 1 ? (
+                  <>
+                    <motion.div 
+                      initial={{ y: 20 }}
+                      animate={{ y: 0 }}
+                      className="text-[60px] sm:text-[120px] font-black text-green-500 leading-none drop-shadow-[0_0_30px_rgba(34,197,94,0.5)] mb-4"
+                    >
+                      1,000,000,000
+                    </motion.div>
+                    <div className="text-xl sm:text-3xl font-black text-white uppercase tracking-widest mb-8 px-4">HEADS - ULTIMATE JACKPOT</div>
+                    <motion.div 
+                       animate={{ 
+                          scale: [1, 1.2, 1],
+                          opacity: [0.5, 1, 0.5]
+                       }}
+                       transition={{ duration: 0.5, repeat: Infinity }}
+                       className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle,rgba(34,197,94,0.2)_0%,transparent_70%)]"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <motion.div 
+                      initial={{ y: 20 }}
+                      animate={{ y: 0 }}
+                      className="text-[120px] font-black text-gray-700 leading-none mb-4"
+                    >
+                      0.01
+                    </motion.div>
+                    <div className="text-3xl font-black text-gray-500 uppercase tracking-widest mb-8 px-4">TAILS - WOMP WOMP</div>
+                  </>
+                )}
+                <button 
+                  onClick={() => setShowDevReveal(false)}
+                  className="mt-8 px-12 py-4 bg-white/10 hover:bg-white/20 text-white font-bold uppercase tracking-widest rounded-full transition-all border border-white/10"
+                >
+                  Collect Fortune
+                </button>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </motion.div>
   );
 }

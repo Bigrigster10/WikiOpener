@@ -1,19 +1,43 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { Trophy, Coins, Box } from 'lucide-react';
+import { Trophy, Swords, Box, DollarSign } from 'lucide-react';
 
 export function Leaderboard() {
   const { leaderboard, fetchLeaderboard, preferences, profile } = useGameStore();
+  const [currentSort, setCurrentSort] = useState('netWorth');
 
   useEffect(() => {
-    fetchLeaderboard();
-  }, [fetchLeaderboard]);
+    fetchLeaderboard(currentSort);
+  }, [fetchLeaderboard, currentSort]);
+
+  const sortOptions = [
+    { id: 'netWorth', label: 'Net Worth', icon: DollarSign },
+    { id: 'battleWins', label: 'Battle Wins', icon: Swords },
+    { id: 'casesOpened', label: 'Cases Opened', icon: Box },
+  ];
 
   return (
     <div className="max-w-3xl mx-auto w-full space-y-8 flex flex-col items-center">
       <div className="text-center space-y-2 mt-4 glass p-6 px-12 inline-block">
         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Global Scale</h3>
         <h2 className="text-4xl font-black tracking-tighter uppercase text-white">Leaderboard</h2>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {sortOptions.map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setCurrentSort(opt.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs uppercase tracking-widest transition-all ${
+              currentSort === opt.id 
+                ? 'bg-accent border-accent text-white shadow-[0_0_20px_rgba(var(--color-accent),0.3)]' 
+                : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            <opt.icon className="w-3.5 h-3.5" />
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       <div className="glass w-full overflow-hidden flex flex-col p-4 sm:p-6 gap-4">
@@ -48,20 +72,32 @@ export function Leaderboard() {
                     <span>{player.displayName}</span>
                     {idx === 0 && <span className="bg-yellow-500 text-black text-[9px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Rank 1</span>}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Opened:</span>
-                    <span className="text-xs text-gray-400 font-mono">{player.casesOpened || 0}</span>
+                  <div className="flex gap-4 mt-1">
+                    <div className="flex items-center gap-1.5 grayscale opacity-50">
+                       <Box className="w-3 h-3" />
+                       <span className="text-[10px] font-mono font-bold text-white">{player.casesOpened || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 grayscale opacity-50">
+                       <Swords className="w-3 h-3" />
+                       <span className="text-[10px] font-mono font-bold text-white">{player.battleWins || 0}</span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="ml-4 text-right flex flex-col items-end pr-2">
-                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">Net Worth</div>
-                  <div className="flex items-center gap-1 font-mono font-bold text-emerald-400">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">
+                    {currentSort === 'battleWins' ? 'Battle Wins' : currentSort === 'casesOpened' ? 'Cases Opened' : 'Net Worth'}
+                  </div>
+                  <div className={`flex items-center gap-1 font-mono font-bold ${currentSort === 'battleWins' ? 'text-blue-400' : currentSort === 'casesOpened' ? 'text-amber-400' : 'text-emerald-400'}`}>
                     {profile && player.userId === profile.userId && preferences.streamerMode ? (
                       <span className="text-lg opacity-50 blur-sm select-none">HIDDEN</span>
                     ) : (
                       <span className="text-lg">
-                        {preferences.currency === 'CR' ? 
+                        {currentSort === 'battleWins' ? 
+                          player.battleWins || 0 :
+                          currentSort === 'casesOpened' ?
+                          player.casesOpened || 0 :
+                          preferences.currency === 'CR' ? 
                           `${player.netWorth.toLocaleString()} CR` : 
                           `$${player.netWorth.toLocaleString(undefined, {minimumFractionDigits: 2})}`
                         }

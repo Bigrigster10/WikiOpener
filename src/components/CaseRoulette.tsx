@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Item } from '../store/gameStore';
+import { Item } from '../types';
 import { CaseType, RARITIES, drawRarity } from '../lib/gameLogic';
 import { playSound } from '../lib/sounds';
+import { ShinyEffect } from './ShinyEffect';
 
 interface CaseRouletteProps {
   targetItem: Item;
@@ -25,7 +26,9 @@ function generateDummyItem(activeCase: CaseType) {
   return {
     id: Math.random().toString(),
     rarity: r.name,
-    color: RARITY_COLORS[r.name] || 'bg-gray-500 shadow-gray-500'
+    color: RARITY_COLORS[r.name] || 'bg-gray-500 shadow-gray-500',
+    isTarget: false,
+    shinyType: 'None' as const
   };
 }
 
@@ -134,7 +137,8 @@ export function CaseRoulette({ targetItem, activeCase, onFinish }: CaseRouletteP
           rarity: targetItem.rarity,
           color: RARITY_COLORS[targetItem.rarity] || 'bg-gray-500 shadow-gray-500',
           isTarget: true,
-          image: targetItem.image
+          image: targetItem.image,
+          shinyType: targetItem.shinyType || 'None'
         });
       } else {
         items.push(generateDummyItem(activeCase));
@@ -280,6 +284,14 @@ export function CaseRoulette({ targetItem, activeCase, onFinish }: CaseRouletteP
                 className={`w-[140px] h-44 shrink-0 relative flex flex-col justify-end overflow-hidden rounded bg-black border border-white/10 shadow-[0_4px_25px_rgba(0,0,0,0.5)] group ${isTarget && complete ? `z-50 ring-4 ${config.twColor}` : ''}`}
                 style={isTarget && complete ? { boxShadow: `0 0 40px ${config.color}`, borderColor: config.color } : {}}
               >
+                  {isTarget && complete && item.shinyType !== 'None' && (
+                    <>
+                      <ShinyEffect type={item.shinyType as any} className="absolute inset-0 z-10" children={<div className="w-full h-full" />} />
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 bg-white text-black text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-bounce uppercase">
+                        {item.shinyType}
+                      </div>
+                    </>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/80 z-10 pointer-events-none"/>
                   
                   <div className="absolute inset-0 flex items-center justify-center z-0 group-hover:scale-110 transition-transform">

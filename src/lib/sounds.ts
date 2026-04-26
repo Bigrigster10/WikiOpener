@@ -12,7 +12,7 @@ function getContext() {
   return audioCtx;
 }
 
-export function playSound(type: 'click' | 'open' | 'success' | 'sell' | 'tick' | 'legendary' | 'epic') {
+export function playSound(type: 'click' | 'open' | 'success' | 'sell' | 'tick' | 'legendary' | 'epic' | 'womp') {
   const { preferences } = useGameStore.getState();
   if (!preferences.sound) return;
 
@@ -36,6 +36,16 @@ export function playSound(type: 'click' | 'open' | 'success' | 'sell' | 'tick' |
     gainNode.gain.setValueAtTime(0, now);
 
     switch (type) {
+      case 'womp':
+        // Descending low tone
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(50, now + 0.8);
+        gainNode.gain.linearRampToValueAtTime(0.1, now + 0.1);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+        break;
       case 'click':
         osc.type = 'sine';
         osc.frequency.setValueAtTime(500, now);
