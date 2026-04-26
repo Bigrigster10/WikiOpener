@@ -300,7 +300,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
         t.set(statsRef, {
           jackpot: nextJackpot,
-          lastWinnerName: wonJackpot ? profile.displayName : (statsSnap.exists() ? statsSnap.data().lastWinnerName : null),
+          lastWinnerName: wonJackpot ? (profile.displayName || "Anonymous") : (statsSnap.exists() ? (statsSnap.data().lastWinnerName || null) : null),
           updatedAt: serverTimestamp()
         }, { merge: true });
 
