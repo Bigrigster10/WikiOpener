@@ -10,7 +10,6 @@ interface GameState {
   bet: number;
   playerY: number;
   maxPlayerY: number;
-  comboActive: boolean;
   intensity: number;
 }
 
@@ -26,7 +25,6 @@ export function MoneyMultiplier() {
     bet: 10,
     playerY: 0,
     maxPlayerY: 0,
-    comboActive: false,
     intensity: 0,
   });
 
@@ -36,15 +34,12 @@ export function MoneyMultiplier() {
 
   // Game internals
   const stateRef = useRef({
-    player: { x: 3, y: 0, isShielded: false },
+    player: { x: 3, y: 0 },
     rows: [] as any[],
     cameraY: 0,
-    lastHops: [] as number[],
     lanes: 7,
     lastHopTime: 0,
     particles: [] as any[],
-    shieldTimer: 0,
-    lastShieldTime: 0,
     screenShake: 0,
     velocitySurge: false,
   });
@@ -63,15 +58,12 @@ export function MoneyMultiplier() {
     if (!paid) return;
 
     stateRef.current = {
-      player: { x: 3, y: 0, isShielded: false },
+      player: { x: 3, y: 0 },
       rows: generateRows(0, 30),
       cameraY: 0,
-      lastHops: [],
       lanes: 7,
       lastHopTime: performance.now(),
       particles: [],
-      shieldTimer: 0,
-      lastShieldTime: 0,
       screenShake: 0,
       velocitySurge: false,
     };
@@ -83,7 +75,6 @@ export function MoneyMultiplier() {
       bet: bet,
       playerY: 0,
       maxPlayerY: 0,
-      comboActive: false,
       intensity: 0,
     });
   }, [betAmount, profile, payEntryFee]);
@@ -155,21 +146,7 @@ export function MoneyMultiplier() {
     st.player.y += dy;
 
     const now = performance.now();
-    st.lastHops.push(now);
-    if (st.lastHops.length > 5) st.lastHops.shift();
-    
     let isSurge = (st.player.y > 0 && st.player.y % 10 === 0) || (st.player.y > 0 && Math.floor(st.player.y/10) < Math.floor((st.player.y+dy)/10));
-
-    // Check combo
-    let comboActive = gameState.comboActive;
-    if (st.lastHops.length === 5 && (now - st.lastHops[0] < 3000) && st.shieldTimer <= 0) {
-       if (st.lastShieldTime === 0 || now - st.lastShieldTime >= 15000) {
-           st.shieldTimer = 3000; // 3 sec shield
-           st.lastShieldTime = now;
-           comboActive = true;
-           st.lastHops = []; // reset combo
-       }
-    }
 
     setGameState(prev => {
       let nextMaxY = Math.max(prev.maxPlayerY, st.player.y);
@@ -186,7 +163,6 @@ export function MoneyMultiplier() {
         playerY: st.player.y,
         maxPlayerY: nextMaxY,
         multiplier: parseFloat((baseMulti + surgeBonus).toFixed(2)),
-        comboActive,
         intensity: Math.min(1.0, nextMaxY / 50)
       };
     });
@@ -195,7 +171,7 @@ export function MoneyMultiplier() {
     if (st.rows[st.rows.length - 1].y < st.player.y + 15) {
        st.rows.push(...generateRows(st.rows[st.rows.length - 1].y + 1, 10));
     }
-  }, [gameState.status, gameState.isPaused, gameState.comboActive]);
+  }, [gameState.status, gameState.isPaused]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -233,17 +209,6 @@ export function MoneyMultiplier() {
       const st = stateRef.current;
       if (gameState.status !== 'playing' && gameState.status !== 'crashed') return;
       if (gameState.isPaused) dt = 0;
-
-      // Update Shield Timer
-      if (st.shieldTimer > 0) {
-        st.shieldTimer -= dt * 1000;
-        st.player.isShielded = true;
-        if (st.shieldTimer <= 0) {
-            setGameState(p => ({ ...p, comboActive: false }));
-        }
-      } else {
-        st.player.isShielded = false;
-      }
 
       // Check Surge
       st.velocitySurge = Math.floor(st.player.y / 10) > 0 && (st.player.y % 10 >= 8 || st.player.y % 10 === 0);
@@ -284,7 +249,7 @@ export function MoneyMultiplier() {
 
           if (currentRow?.type === 'river' && !onLog) hit = true; // drowned
 
-          if (hit && !st.player.isShielded) {
+          if (hit) {
               handleCrash();
           }
       } else {
@@ -368,11 +333,7 @@ export function MoneyMultiplier() {
       // Draw Player
       if (gameState.status !== 'crashed') {
           let py = drawY(st.player.y);
-          ctx.fillStyle = st.player.isShielded ? '#a855f7' : '#3b82f6';
-          if (st.player.isShielded) {
-             ctx.shadowColor = '#a855f7';
-             ctx.shadowBlur = 20;
-          }
+          ctx.fillStyle = '#3b82f6';
           ctx.fillRect(st.player.x * TILE_SIZE + 10, py + 10, TILE_SIZE - 20, TILE_SIZE - 20);
           ctx.shadowBlur = 0;
       }
@@ -417,16 +378,10 @@ export function MoneyMultiplier() {
         <div className="absolute top-6 left-6 flex items-center gap-4">
            <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 flex flex-col">
               <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Multiplier</span>
-              <span className={`text-4xl font-black ${gameState.comboActive ? 'text-purple-400 animate-pulse' : 'text-emerald-400'}`}>
+              <span className="text-4xl font-black text-emerald-400">
                  {gameState.multiplier.toFixed(2)}x
               </span>
            </div>
-           
-           {gameState.comboActive && (
-              <div className="bg-purple-500/20 text-purple-400 border border-purple-500/50 px-4 py-2 rounded-full flex items-center gap-2 animate-bounce">
-                <Zap fill="currentColor" className="w-4 h-4" /> Shield Active
-              </div>
-           )}
         </div>
 
         {stateRef.current.velocitySurge && (
@@ -565,7 +520,6 @@ export function MoneyMultiplier() {
              <h4 className="font-bold uppercase text-white/40 tracking-widest mb-1 text-center">Controls & Mechanics</h4>
              <p>Use your keyboard arrow keys or WASD to navigate the grid. You must interact with the game window first.</p>
              <p className="text-red-400/80 mt-2">Dodge the horizontal traffic and rivers. Hitting an obstacle instantly crashes the bet.</p>
-             <p className="text-purple-400/80 mt-2">String 5 hops together quickly (&lt;3s) for a brief invincibility shield (15s cooldown).</p>
          </div>
       </div>
     </div>

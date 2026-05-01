@@ -10,6 +10,8 @@ import { ScratchTickets } from './ScratchTickets';
 import { JackpotPool } from './JackpotPool';
 import { BombDefuse } from './BombDefuse';
 import { MoneyMultiplier } from './MoneyMultiplier';
+import { Crash } from './Crash';
+import { Coinflip } from './Coinflip';
 
 export function Minigames() {
   const location = useLocation();
@@ -49,6 +51,10 @@ export function Minigames() {
               return <div className="mt-6 flex-1 flex flex-col"><BombDefuse /></div>;
           case 'moneymultiplier':
               return <div className="mt-6 flex-1 flex flex-col"><MoneyMultiplier /></div>;
+          case 'crash':
+              return <div className="glass p-6 min-h-[600px] flex flex-col relative overflow-hidden mt-6"><Crash /></div>;
+          case 'coinflip':
+              return <div className="flex-1 flex flex-col"><Coinflip /></div>;
           default:
               return (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -157,7 +163,7 @@ export function Minigames() {
                       {/* Money Multiplier */}
                       <button 
                         onClick={() => setActiveGame('moneymultiplier')}
-                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-blue-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-blue-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 lg:col-span-1"
                       >
                           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                           <div className="w-14 h-14 rounded-2xl bg-blue-500/20 flex flex-col items-center justify-center shrink-0 border border-blue-500/20">
@@ -167,6 +173,40 @@ export function Minigames() {
                               <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Money Multiplier</h3>
                               <p className="text-gray-400 text-sm leading-relaxed">
                                   Endless hopper! Hop forward to dodge traffic and boost your multiplier. Cash out before you crash.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Crash */}
+                      <button 
+                        onClick={() => setActiveGame('crash')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-orange-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 lg:col-span-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-orange-500/20 flex flex-col items-center justify-center shrink-0 border border-orange-500/20">
+                              <TrendingUp className="w-7 h-7 text-orange-500" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Crash</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  Ride the multiplier as it rockets up! Cash out before the inevitable crash to secure your winnings.
+                              </p>
+                          </div>
+                      </button>
+
+                      {/* Coinflip */}
+                      <button 
+                        onClick={() => setActiveGame('coinflip')}
+                        className="glass relative overflow-hidden group rounded-3xl p-8 border-2 border-white/5 hover:border-yellow-500/50 text-left transition-all duration-300 hover:shadow-[0_0_40px_rgba(234,179,8,0.15)] flex flex-col items-start gap-4 hover:-translate-y-1 lg:col-span-1"
+                      >
+                          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="w-14 h-14 rounded-2xl bg-yellow-500/20 flex flex-col items-center justify-center shrink-0 border border-yellow-500/20">
+                              <div className="w-7 h-7 rounded-full bg-yellow-500 text-yellow-900 flex items-center justify-center font-black text-xs">C</div>
+                          </div>
+                          <div>
+                              <h3 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Coinflip</h3>
+                              <p className="text-gray-400 text-sm leading-relaxed">
+                                  The simplest way to double your value. Flip coins against bots for exact item values or play heads/tails with credits.
                               </p>
                           </div>
                       </button>

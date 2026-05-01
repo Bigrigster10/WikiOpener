@@ -34,6 +34,7 @@ interface GameState {
   addBotJackpotContribution: (simulatedValue: number, isExceedinglyRare?: boolean) => Promise<void>;
   playScratchTicket: (cost: number) => Promise<{ winAmount: number, spaces: number[] }>;
   executeJackpotLobby: (wageredItems: Item[], allPotItems: Item[], didWin: boolean) => Promise<boolean>;
+  executeItemCoinflip: (wageredItemId: string, winItem: Item | null) => Promise<boolean>;
   payEntryFee: (cost: number) => Promise<boolean>;
   claimCashReward: (amount: number) => Promise<boolean>;
 }
@@ -705,6 +706,67 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  executeItemCoinflip: async (wageredItemId: string, winItem: Item | null) => {
+    const { user, profile, inventory } = get();
+    if (!user || !profile) return false;
+
+    if (isDevMode) {
+        let newInv = inventory;
+        if (!winItem) {
+            // Lost, remove wagered item
+            newInv = inventory.filter(i => i.id !== wageredItemId);
+        } else {
+            // Won, add won item (wagered item stays)
+            const newItemObj = { ...winItem, id: crypto.randomUUID() };
+            newInv = [newItemObj, ...inventory];
+        }
+        
+        const newNetWorth = profile.credits + newInv.reduce((acc, i) => acc + i.value, 0);
+        const newProfile = { ...profile, netWorth: newNetWorth };
+
+        localStorage.setItem('dev-mock-profile', JSON.stringify(newProfile));
+        localStorage.setItem('dev-mock-inventory', JSON.stringify(newInv));
+        set({ profile: newProfile, inventory: newInv });
+        return true;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    try {
+        await runTransaction(db, async (t) => {
+            const userDoc = await t.get(userRef);
+            if (!userDoc.exists()) throw new Error("No user");
+            const data = userDoc.data();
+
+            let gainedValue = 0;
+            let lostValue = 0;
+
+            if (!winItem) {
+                // Lost
+                const wageredItem = inventory.find(i => i.id === wageredItemId);
+                if (wageredItem) lostValue = wageredItem.value;
+                t.delete(doc(db, `users/${user.uid}/inventory`, wageredItemId));
+            } else {
+                // Won
+                const id = crypto.randomUUID();
+                t.set(doc(db, `users/${user.uid}/inventory`, id), {
+                    ...winItem, id, acquiredAt: serverTimestamp()
+                });
+                gainedValue = winItem.value;
+            }
+
+            const newNetWorth = data.credits + get().inventory.reduce((acc, i) => acc + i.value, 0) - lostValue + gainedValue;
+
+            t.update(userRef, {
+                netWorth: newNetWorth,
+                updatedAt: serverTimestamp()
+            });
+        });
+        return true;
+    } catch(e: any) {
+        handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
+        return false;
+    }
+  },
   claimCashReward: async (amount: number) => {
     const { user, profile } = get();
     if (!user || !profile || amount <= 0) return false;
